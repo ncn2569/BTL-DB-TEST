@@ -1,45 +1,52 @@
+<!-- FE/Form/index.html -->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
   <title>Menu chính - Demo CSDL</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Font Awesome cho icon -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
+
 <body class="home-body">
+  <!-- Lớp nền gradient + ảnh -->
   <div class="home-overlay"></div>
 
   <div class="home-container">
+    <!-- Header -->
     <header class="home-header">
-      <h1>Demo kết nối CSDL</h1>
-      <p>Chọn chức năng bạn muốn minh họa</p>
+      <h1><i class="fas fa-database"></i> Demo kết nối CSDL</h1>
+      <p>Chọn chức năng bạn muốn minh họa bên dưới</p>
     </header>
 
+    <!-- Menu chính -->
     <main class="home-main">
       <div class="menu-grid">
 
         <a href="users.html" class="menu-card">
-          <h2>CRUD USERS</h2>
-          <p>Thêm / sửa / xóa dữ liệu bảng USERS qua stored procedure.</p>
+          <h2><i class="fas fa-users"></i> CRUD USERS</h2>
+          <p>Thêm / sửa / xóa dữ liệu bảng USERS thông qua stored procedure.</p>
         </a>
 
         <a href="orders.html" class="menu-card">
-          <h2>Đơn hàng</h2>
+          <h2><i class="fas fa-receipt"></i> Đơn hàng</h2>
           <p>Hiển thị danh sách đơn hàng từ GetOrderByCustomerAndStatus.</p>
         </a>
 
         <a href="restaurant-stats.html" class="menu-card">
-          <h2>Thống kê nhà hàng</h2>
-          <p>Doanh thu nhà hàng bằng GetRestaurantSalesStats.</p>
+          <h2><i class="fas fa-chart-line"></i> Thống kê nhà hàng</h2>
+          <p>Thống kê doanh thu bằng GetRestaurantSalesStats.</p>
         </a>
 
         <a href="stats-spending.html" class="menu-card">
-          <h2>Chi tiêu khách hàng</h2>
-          <p>Tổng chi tiêu từ fn_TongChiTieuKhachHang.</p>
+          <h2><i class="fas fa-wallet"></i> Chi tiêu khách hàng</h2>
+          <p>Tổng chi tiêu thông qua fn_TongChiTieuKhachHang.</p>
         </a>
 
         <a href="stats-voucher.html" class="menu-card">
-          <h2>Tiết kiệm voucher</h2>
-          <p>Tiền tiết kiệm từ fn_TongTienTietKiemTuVoucher.</p>
+          <h2><i class="fas fa-ticket-alt"></i> Tiết kiệm voucher</h2>
+          <p>Tính tổng tiền tiết kiệm từ fn_TongTienTietKiemTuVoucher.</p>
         </a>
 
       </div>

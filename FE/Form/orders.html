@@ -5,61 +5,70 @@
   <meta charset="UTF-8">
   <title>Đơn hàng theo trạng thái</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Font Awesome cho icon -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
+
 <body class="page-body">
   <div class="page-container">
-    <div class="page-card">
 
-      <div class="page-header">
-        <div class="page-title-group">
-          <h1>Đơn hàng theo trạng thái</h1>
-          <p>Gọi stored procedure <strong>GetOrderByCustomerAndStatus</strong></p>
-        </div>
-        <a href="index.html" class="back-link">← Về menu chính</a>
+    <!-- Phần đầu trang -->
+    <header class="page-header">
+      <div class="page-title-group">
+        <h1><i class="fas fa-receipt"></i> Đơn hàng theo trạng thái</h1>
+        <p>Gọi stored procedure <strong>GetOrderByCustomerAndStatus</strong></p>
       </div>
+      <a href="index.html" class="back-link"><i class="fas fa-arrow-left"></i> Về menu chính</a>
+    </header>
 
-      <form id="order-search-form">
+    <!-- Thẻ card chính -->
+    <section class="page-card">
+
+      <!-- Form tìm kiếm đơn hàng -->
+      <form id="order-search-form" class="search-form">
+        <h3><i class="fas fa-search"></i> Tìm đơn hàng</h3>
+
         <div class="form-row">
-          <label>
-            Customer ID<br>
-            <input type="number" id="order-customer-id" required>
-          </label>
+          <label for="order-customer-id">Customer ID</label>
+          <input type="number" id="order-customer-id" required>
 
-          <label>
-            Trạng thái<br>
-            <select id="order-trangthai" required>
-              <option value="">--Chọn--</option>
-              <option value="đang xử lý">đang xử lý</option>
-              <option value="đang giao">đang giao</option>
-              <option value="hoàn tất">hoàn tất</option>
-              <option value="hủy">hủy</option>
-            </select>
-          </label>
+          <label for="order-trangthai">Trạng thái</label>
+          <select id="order-trangthai" required>
+            <option value="">--Chọn--</option>
+            <option value="đang xử lý">Đang xử lý</option>
+            <option value="đang giao">Đang giao</option>
+            <option value="hoàn tất">Hoàn tất</option>
+            <option value="hủy">Hủy</option>
+          </select>
 
-          <button type="submit">Tìm đơn hàng</button>
+          <button type="submit" class="btn btn-search">
+            <i class="fas fa-filter"></i> Tìm đơn hàng
+          </button>
         </div>
       </form>
 
-      <div id="orders-message" class="message"></div>
+      <!-- Thông báo -->
+      <div id="orders-message" class="message" style="display:none;"></div>
 
-      <div class="table-wrapper">
-        <table id="orders-table">
+      <!-- Bảng hiển thị kết quả -->
+      <div class="table-container">
+        <table id="orders-table" class="data-table">
           <thead>
             <tr>
-              <th>Mã đơn</th>
-              <th>Ngày tạo</th>
-              <th>Nhà hàng</th>
-              <th>Trạng thái</th>
-              <th>Giá đơn</th>
-              <th>Phí giao</th>
-              <th>Địa chỉ</th>
+              <th><i class="fas fa-hashtag"></i> Mã đơn</th>
+              <th><i class="fas fa-calendar-day"></i> Ngày tạo</th>
+              <th><i class="fas fa-store"></i> Nhà hàng</th>
+              <th><i class="fas fa-info-circle"></i> Trạng thái</th>
+              <th><i class="fas fa-money-bill-wave"></i> Giá đơn</th>
+              <th><i class="fas fa-truck"></i> Phí giao</th>
+              <th><i class="fas fa-map-marker-alt"></i> Địa chỉ</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
 
-    </div>
+    </section>
   </div>
 
   <script src="orders.js"></script>

@@ -57,28 +57,28 @@ th {
 #main-background {
     /* Đây là placeholder, bạn có thể thay ảnh tại đây */
     
-    /* background-image: url('backgorund2.jpg');
+    /* background-image: url('backgorund2.jpg'); */
+
     background-size: cover;
     background-attachment: fixed;
     filter: brightness(0.9);
-   
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: var(--background-dark); /* Dùng màu nền nếu không có ảnh */
-    /* z-index: -1;*/
-    position: fixed;
+    background-color: var(--background-dark);  /*Dùng màu nền nếu không có ảnh */
+    z-index: -1;
+    /* position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background-image: url('backgorund2.jpg'); /* <--- CHỈNH SỬA DƯỜNG DẪN NÀY */
-    background-size: cover;
+    /*background-size: cover;
     background-attachment: fixed;
     filter: brightness(0.95); /* Giảm độ sáng một chút để chữ dễ đọc */
-    z-index: -1;
+    /*z-index: -1; */
 }
 
 /* ---------------------------------------------------------------------- */
