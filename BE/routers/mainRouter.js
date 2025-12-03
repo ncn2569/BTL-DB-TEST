@@ -12,6 +12,10 @@ router.delete('/users/:id', controller.deleteUser);
 // ORDERS – GetOrderByCustomerAndStatus
 router.get('/orders', controller.searchOrders);
 
+// ORDERS – Update/Delete
+router.put('/orders/:id/status', controller.updateOrderStatus);
+router.delete('/orders/:id', controller.deleteOrder);
+
 // STATS – fn_TongChiTieuKhachHang
 router.get('/stats/spending', controller.getCustomerSpending);
 
