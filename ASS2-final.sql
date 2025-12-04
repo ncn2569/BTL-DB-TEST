@@ -957,7 +957,7 @@ BEGIN
                 FROM RATING r
                 WHERE r.food_ID = f.food_ID
             ),
-            3   -- điểm mặc định nếu không còn rating
+            5   -- điểm mặc định nếu không còn rating
         )
     FROM FOOD f
     WHERE f.food_ID IN (
@@ -1357,6 +1357,83 @@ EXEC proc_UpdateUser
 EXEC proc_DeleteUser
     @UserID = 1001;
 
+GO
+
+IF OBJECT_ID('UpdateOrderStatus', 'P') IS NOT NULL
+    DROP PROC UpdateOrderStatus;
+GO
+
+CREATE PROC UpdateOrderStatus
+    @OrderID       INT,
+    @TrangThai     NVARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        -- Kiểm tra đơn hàng tồn tại
+        IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID)
+            THROW 50300, N'Không tìm thấy đơn hàng với ID cần cập nhật.', 1;
+        
+        -- Kiểm tra trạng thái hợp lệ
+        IF @TrangThai NOT IN (N'đang xử lý', N'đang giao', N'hoàn tất', N'hủy')
+            THROW 50301, N'Trạng thái không hợp lệ. Các trạng thái hợp lệ: đang xử lý, đang giao, hoàn tất, hủy', 1;
+        
+        -- Lấy trạng thái hiện tại
+        DECLARE @CurrentStatus NVARCHAR(50);
+        SELECT @CurrentStatus = trang_thai FROM ORDERS WHERE order_ID = @OrderID;
+        
+        -- Kiểm tra logic chuyển trạng thái
+        IF @CurrentStatus IN (N'hoàn tất', N'hủy')
+            THROW 50302, N'Không thể thay đổi trạng thái đơn hàng đã hoàn tất hoặc đã hủy', 1;
+        
+        IF @CurrentStatus = N'đang xử lý' AND @TrangThai NOT IN (N'đang giao', N'hủy')
+            THROW 50303, N'Đơn hàng đang xử lý chỉ có thể chuyển sang "đang giao" hoặc "hủy"', 1;
+        
+        IF @CurrentStatus = N'đang giao' AND @TrangThai <> N'hoàn tất'
+            THROW 50304, N'Đơn hàng đang giao chỉ có thể chuyển sang "hoàn tất"', 1;
+        
+        -- Cập nhật trạng thái (trigger sẽ kiểm tra logic)
+        UPDATE ORDERS
+        SET trang_thai = @TrangThai
+        WHERE order_ID = @OrderID;
+        
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
+GO
+
+-- DeleteOrder: Xóa đơn hàng (chỉ cho phép xóa đơn đã hủy)
+IF OBJECT_ID('DeleteOrder', 'P') IS NOT NULL
+    DROP PROC DeleteOrder;
+GO
+
+CREATE PROC DeleteOrder
+    @OrderID       INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        -- Kiểm tra đơn hàng tồn tại
+        IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID)
+            THROW 50400, N'Không tìm thấy đơn hàng với ID cần xóa.', 1;
+        
+        -- Chỉ cho phép xóa đơn đã hủy
+        IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID AND trang_thai = N'hủy')
+            THROW 50401, N'Chỉ có thể xóa đơn hàng đã ở trạng thái "hủy"', 1;
+        
+        -- Xóa đơn hàng (CASCADE sẽ xóa các bản ghi liên quan)
+        DELETE FROM ORDERS
+        WHERE order_ID = @OrderID;
+        
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
 GO
 
 -----------------------------------------------------------
