@@ -581,56 +581,67 @@ VALUES
 -----------------------------------------------------------
 
 -- ORDERS: nếu đơn bị hủy, hoàn lại voucher (gỡ order_ID trên VOUCHER)
+-- Chỉ hoàn voucher nếu voucher còn hạn sử dụng
 GO
-CREATE TRIGGER trg_RefundVoucherOnCanceledOrder
+IF OBJECT_ID('trg_refund_voucher_on_cancel', 'TR') IS NOT NULL 
+    DROP TRIGGER trg_refund_voucher_on_cancel;
+GO
+
+CREATE TRIGGER trg_refund_voucher_on_cancel
 ON ORDERS
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    -- Chỉ xử lý dòng có thay đổi trạng thái thành "hủy"
+    
+    -- Kiểm tra xem có đơn hàng nào vừa chuyển sang trạng thái 'hủy' không
     IF EXISTS (
-        SELECT 1
+        SELECT 1 
         FROM inserted i
         JOIN deleted d ON i.order_ID = d.order_ID
-        WHERE i.trang_thai = N'hủy'
-          AND d.trang_thai <> N'hủy'
+        WHERE i.trang_thai = N'hủy'      -- Trạng thái mới là Hủy
+          AND d.trang_thai <> N'hủy'     -- Trạng thái cũ chưa Hủy
     )
     BEGIN
-        -- Cập nhật voucher về trạng thái chưa sử dụng
+        -- Logic: Tìm các Voucher đang gắn với đơn hàng bị hủy
+        -- Chỉ hoàn lại (set order_ID = NULL) NẾU Voucher đó VẪN CÒN HẠN sử dụng.
         UPDATE VOUCHER
         SET order_ID = NULL
         FROM VOUCHER v
         JOIN inserted i ON v.order_ID = i.order_ID
-        WHERE i.trang_thai = N'hủy';
-
+        WHERE i.trang_thai = N'hủy'
+          AND v.han_su_dung >= GETDATE(); -- Quan trọng: Chỉ hoàn nếu hạn sử dụng >= thời điểm hiện tại
     END
 END;
 GO
 
-
--- RATING: cập nhật điểm trung bình của shipper mỗi khi có rating mới
+-- RATING: cập nhật điểm rating của food khi có sự thay đổi ở rating
 GO
-CREATE TRIGGER trg_UpdateShipperRating
+IF OBJECT_ID('trg_UpdateFoodRating', 'TR') IS NOT NULL 
+    DROP TRIGGER trg_UpdateFoodRating;
+GO
+
+CREATE TRIGGER trg_UpdateFoodRating
 ON RATING
-AFTER INSERT, UPDATE
+AFTER INSERT, UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    UPDATE s
-    SET s.diem_danh_gia = (
-        SELECT AVG(CAST(r.Diem_danh_gia AS DECIMAL(3,1)))
-        FROM RATING r
-        JOIN DELIVERING d ON r.order_ID = d.order_ID
-        WHERE d.shipper_ID = s.user_ID
+    
+    UPDATE f
+    SET f.Diem_danh_gia = ISNULL(
+        (
+            SELECT AVG(CAST(r.Diem_danh_gia AS DECIMAL(3,1)))
+            FROM RATING r
+            WHERE r.food_ID = f.food_ID
+        ),
+        5 -- điểm mặc định nếu không còn rating
     )
-    FROM SHIPPER s
-    WHERE s.user_ID IN (
-        SELECT d.shipper_ID 
-        FROM inserted i
-        JOIN DELIVERING d ON i.order_ID = d.order_ID
+    FROM FOOD f
+    WHERE f.food_ID IN (
+        SELECT food_ID FROM inserted
+        UNION
+        SELECT food_ID FROM deleted
     );
 END;
 GO
@@ -651,15 +662,16 @@ SELECT * FROM VOUCHER WHERE voucher_ID = 200;
 
 ---------------------------------------------------
 
--- Test: thêm rating mới cho đơn 100 (do shipper 6 giao) -> điểm shipper cập nhật
-SELECT * FROM SHIPPER;
+-- Test: thêm rating mới cho món 10 -> điểm food cập nhật
+SELECT * FROM FOOD WHERE food_ID = 10;
 SELECT * FROM RATING;
-INSERT INTO RATING(order_ID, rating_ID, Noi_dung, Diem_danh_gia)
-VALUES (100, 2, N'Thái độ tốt', 4);
-INSERT INTO RATING(order_ID, rating_ID, Noi_dung, Diem_danh_gia)
-VALUES (100, 3, N'Thái độ tốt', 5);
-SELECT * FROM SHIPPER WHERE user_ID = 6;
--- Kết quả: diem_danh_gia cập nhật = AVG(5, 4) = 4.5
+INSERT INTO RATING(order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 2, 10, N'Món ngon', 4);
+INSERT INTO RATING(order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 3, 10, N'Rất ngon', 5);
+SELECT * FROM FOOD WHERE food_ID = 10;
+-- Kết quả: Diem_danh_gia cập nhật = AVG(4, 5) = 4.5
+
 
 ----- TEST TRIGGER TRÊN DELIVERING / FOOD / VOUCHER -----
 
@@ -1377,3 +1389,501 @@ SELECT 'PARENT RESTAURANT' AS Ten_bang, * FROM PARENT_RESTAURANT;
 SELECT 'VOUCHER' AS Ten_bang, * FROM VOUCHER;
 SELECT 'FOOD_BELONG' AS Ten_bang, * FROM FOOD_BELONG;
 SELECT 'FOOD_ORDERED' AS Ten_bang, * FROM FOOD_ORDERED;
+
+-----------------------------------------------------------
+-- REGION 9: TESTCASE CHO TRIGGER NGHIỆP VỤ
+-----------------------------------------------------------
+-- File này chứa các testcase đầy đủ để test 2 trigger nghiệp vụ:
+-- 1. trg_refund_voucher_on_cancel - Hoàn voucher khi đơn hủy (chỉ hoàn nếu voucher còn hạn)
+-- 2. trg_UpdateFoodRating - Cập nhật điểm rating của FOOD khi có thay đổi ở RATING
+
+-- Lưu ý: Mỗi testcase nên chạy trong transaction riêng và rollback sau khi test
+-- để không ảnh hưởng đến dữ liệu của các testcase khác
+
+-----------------------------------------------------------
+-- PHẦN A: TESTCASE CHO TRIGGER HOÀN VOUCHER KHI ĐƠN HỦY
+-----------------------------------------------------------
+
+PRINT '========================================';
+PRINT 'PHẦN A: TEST TRIGGER HOÀN VOUCHER';
+PRINT '========================================';
+
+-- A.1. TC1 - Hủy đơn có voucher -> Voucher được hoàn
+PRINT '';
+PRINT 'A.1. TC1 - Hủy đơn có voucher -> Voucher được hoàn';
+PRINT 'Mục tiêu: Kiểm tra khi đơn có voucher đổi trạng thái sang "hủy" thì voucher được trả lại';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Reset đơn 101 về trạng thái 'hoàn tất' và gắn lại voucher
+UPDATE ORDERS
+SET trang_thai = N'hoàn tất'
+WHERE order_ID = 101;
+
+UPDATE VOUCHER
+SET order_ID = 101,
+    han_su_dung = '2026-01-01'
+WHERE voucher_ID = 200;
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi hủy:' AS Thoi_diem;
+SELECT voucher_ID, order_ID, han_su_dung, customer_ID
+FROM VOUCHER
+WHERE voucher_ID = 200;
+
+-- Action: Hủy đơn 101
+UPDATE ORDERS
+SET trang_thai = N'hủy'
+WHERE order_ID = 101;
+
+-- Expected: Kiểm tra sau khi hủy
+SELECT 'Sau khi hủy:' AS Thoi_diem;
+SELECT voucher_ID, order_ID, han_su_dung, customer_ID
+FROM VOUCHER
+WHERE voucher_ID = 200;
+SELECT order_ID, trang_thai
+FROM ORDERS
+WHERE order_ID = 101;
+
+-- Kết quả mong đợi: order_ID của voucher 200 phải = NULL (voucher được hoàn)
+-- Nếu đúng -> PASS, ngược lại -> FAIL
+
+ROLLBACK TRANSACTION;
+PRINT 'TC1 hoàn thành';
+
+-- A.2. TC2 - Hủy đơn nhưng voucher đã hết hạn -> KHÔNG hoàn (trigger có check hạn)
+PRINT '';
+PRINT 'A.2. TC2 - Hủy đơn nhưng voucher đã hết hạn -> KHÔNG hoàn';
+PRINT 'Mục tiêu: Trigger chỉ hoàn voucher nếu voucher còn hạn sử dụng (han_su_dung >= GETDATE())';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Reset đơn 101 và gắn voucher với hạn đã quá khứ
+UPDATE ORDERS
+SET trang_thai = N'hoàn tất'
+WHERE order_ID = 101;
+
+UPDATE VOUCHER
+SET han_su_dung = '2023-01-01',  -- ngày trong quá khứ
+    order_ID = 101
+WHERE voucher_ID = 200;
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi hủy (voucher hết hạn):' AS Thoi_diem;
+SELECT voucher_ID, order_ID, han_su_dung
+FROM VOUCHER
+WHERE voucher_ID = 200;
+
+-- Action: Hủy đơn 101
+UPDATE ORDERS
+SET trang_thai = N'hủy'
+WHERE order_ID = 101;
+
+-- Expected: Kiểm tra sau khi hủy
+SELECT 'Sau khi hủy:' AS Thoi_diem;
+SELECT voucher_ID, order_ID, han_su_dung
+FROM VOUCHER
+WHERE voucher_ID = 200;
+
+-- Kết quả mong đợi: order_ID của voucher 200 VẪN = 101 (voucher KHÔNG được hoàn vì đã hết hạn)
+-- Nếu voucher bị set NULL -> trigger sai -> FAIL
+
+ROLLBACK TRANSACTION;
+PRINT 'TC2 hoàn thành';
+
+-- A.3. TC3 - Đơn vốn đã = "hủy", update lại -> Không hoàn (idempotent)
+PRINT '';
+PRINT 'A.3. TC3 - Đơn vốn đã = "hủy", update lại -> Không hoàn';
+PRINT 'Mục tiêu: Cập nhật lại cùng trạng thái "hủy" không làm thay đổi voucher';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Cho đơn 101 đã ở trạng thái hủy, voucher vẫn gắn
+UPDATE ORDERS
+SET trang_thai = N'hủy'
+WHERE order_ID = 101;
+
+UPDATE VOUCHER
+SET order_ID = 101,
+    han_su_dung = '2026-01-01'
+WHERE voucher_ID = 200;
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi update lại:' AS Thoi_diem;
+SELECT voucher_ID, order_ID
+FROM VOUCHER
+WHERE voucher_ID = 200;
+SELECT order_ID, trang_thai
+FROM ORDERS
+WHERE order_ID = 101;
+
+-- Action: Update lại cùng trạng thái 'hủy'
+UPDATE ORDERS
+SET trang_thai = N'hủy'
+WHERE order_ID = 101;
+
+-- Expected: Kiểm tra sau khi update
+SELECT 'Sau khi update lại:' AS Thoi_diem;
+SELECT voucher_ID, order_ID
+FROM VOUCHER
+WHERE voucher_ID = 200;
+
+-- Kết quả mong đợi: order_ID giữ nguyên = 101, không bị set NULL
+-- Nếu có thay đổi -> trigger xử lý sai điều kiện FROM != "hủy" TO "hủy"
+
+ROLLBACK TRANSACTION;
+PRINT 'TC3 hoàn thành';
+
+-- A.4. TC4 - Đơn thay đổi từ "đang giao" -> "hoàn tất" -> Không hoàn
+PRINT '';
+PRINT 'A.4. TC4 - Đơn thay đổi từ "đang giao" -> "hoàn tất" -> Không hoàn';
+PRINT 'Mục tiêu: Trigger chỉ chạy khi đổi sang "hủy", các trạng thái khác không ảnh hưởng voucher';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Reset đơn 101 về trạng thái 'đang giao' và gắn voucher
+UPDATE ORDERS
+SET trang_thai = N'đang giao'
+WHERE order_ID = 101;
+
+UPDATE VOUCHER
+SET order_ID = 101,
+    han_su_dung = '2026-01-01'
+WHERE voucher_ID = 200;
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi đổi trạng thái:' AS Thoi_diem;
+SELECT voucher_ID, order_ID
+FROM VOUCHER
+WHERE voucher_ID = 200;
+SELECT order_ID, trang_thai
+FROM ORDERS
+WHERE order_ID = 101;
+
+-- Action: Đổi từ 'đang giao' sang 'hoàn tất' (không phải 'hủy')
+UPDATE ORDERS
+SET trang_thai = N'hoàn tất'
+WHERE order_ID = 101;
+
+-- Expected: Kiểm tra sau khi đổi trạng thái
+SELECT 'Sau khi đổi trạng thái:' AS Thoi_diem;
+SELECT voucher_ID, order_ID
+FROM VOUCHER
+WHERE voucher_ID = 200;
+SELECT order_ID, trang_thai
+FROM ORDERS
+WHERE order_ID = 101;
+
+-- Kết quả mong đợi: order_ID của voucher 200 vẫn = 101 (voucher không bị hoàn)
+-- Nếu voucher bị set NULL -> trigger đang bắt sai điều kiện
+
+ROLLBACK TRANSACTION;
+PRINT 'TC4 hoàn thành';
+
+-- A.5. TC5 - Hủy đơn không dùng voucher -> Trigger chạy nhưng không update gì
+PRINT '';
+PRINT 'A.5. TC5 - Hủy đơn không dùng voucher -> Trigger chạy nhưng không update gì';
+PRINT 'Mục tiêu: Nếu đơn không có voucher, trigger không làm ảnh hưởng gì tới bảng VOUCHER';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Tạo đơn 300 không có voucher
+IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = 300)
+BEGIN
+    INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
+    VALUES (300, 1, 3, N'đang xử lý', N'Test đơn không voucher', N'Hà Nội', 50000, 10000);
+END
+
+UPDATE ORDERS
+SET trang_thai = N'đang xử lý'
+WHERE order_ID = 300;
+
+-- Đảm bảo không có voucher nào gắn với order_ID = 300
+UPDATE VOUCHER
+SET order_ID = NULL
+WHERE order_ID = 300;
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi hủy (đơn không voucher):' AS Thoi_diem;
+SELECT * FROM VOUCHER WHERE order_ID = 300; -- Kỳ vọng: 0 dòng
+SELECT order_ID, trang_thai
+FROM ORDERS
+WHERE order_ID = 300;
+
+-- Action: Hủy đơn 300
+UPDATE ORDERS
+SET trang_thai = N'hủy'
+WHERE order_ID = 300;
+
+-- Expected: Kiểm tra sau khi hủy
+SELECT 'Sau khi hủy:' AS Thoi_diem;
+SELECT * FROM VOUCHER WHERE order_ID = 300;
+SELECT order_ID, trang_thai
+FROM ORDERS
+WHERE order_ID = 300;
+
+-- Kết quả mong đợi: Kết quả query VOUCHER phải không có bản ghi nào (0 dòng)
+-- Nếu có bản ghi mới hoặc dòng nào bị update sai -> trigger xử lý dư
+
+ROLLBACK TRANSACTION;
+PRINT 'TC5 hoàn thành';
+
+-----------------------------------------------------------
+-- PHẦN B: TESTCASE CHO TRIGGER CẬP NHẬT ĐIỂM RATING FOOD
+-----------------------------------------------------------
+
+PRINT '';
+PRINT '========================================';
+PRINT 'PHẦN B: TEST TRIGGER CẬP NHẬT ĐIỂM RATING FOOD';
+PRINT '========================================';
+
+-- B.1. TC1 - Insert rating đầu tiên cho food -> Tính đúng
+PRINT '';
+PRINT 'B.1. TC1 - Insert rating đầu tiên cho food -> Tính đúng';
+PRINT 'Mục tiêu: Khi thêm rating đầu tiên cho món ăn, điểm trung bình của món = chính điểm vừa insert';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Reset điểm món 10 về 5 và xóa rating cũ
+UPDATE FOOD
+SET Diem_danh_gia = 5
+WHERE food_ID = 10;
+
+DELETE FROM RATING WHERE food_ID = 10;
+
+-- Đảm bảo đơn 100 tồn tại (để có thể insert rating)
+IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = 100)
+BEGIN
+    INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
+    VALUES (100, 1, 3, N'hoàn tất', N'Test đơn 100', N'Hà Nội', 75000, 15000);
+END
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi insert rating:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+
+-- Action: Insert rating đầu tiên cho món 10
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 10, 10, N'Món ngon', 4);
+
+-- Expected: Kiểm tra sau khi insert
+SELECT 'Sau khi insert rating:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+SELECT order_ID, rating_ID, food_ID, Diem_danh_gia
+FROM RATING
+WHERE food_ID = 10;
+
+-- Kết quả mong đợi: Diem_danh_gia của món 10 phải = 4
+-- Nếu đúng -> PASS, ngược lại -> FAIL
+
+ROLLBACK TRANSACTION;
+PRINT 'TC1 hoàn thành';
+
+-- B.2. TC2 - Thêm rating thứ 2 -> Tính trung bình đúng
+PRINT '';
+PRINT 'B.2. TC2 - Thêm rating thứ 2 -> Tính trung bình đúng';
+PRINT 'Mục tiêu: Kiểm tra lại AVG sau khi có 2 bản ghi rating';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Tương tự TC1, nhưng đã có 1 rating
+UPDATE FOOD
+SET Diem_danh_gia = 5
+WHERE food_ID = 10;
+
+DELETE FROM RATING WHERE food_ID = 10;
+
+IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = 100)
+BEGIN
+    INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
+    VALUES (100, 1, 3, N'hoàn tất', N'Test đơn 100', N'Hà Nội', 75000, 15000);
+END
+
+-- Insert rating đầu tiên
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 10, 10, N'Món ngon', 4);
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi insert rating thứ 2:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+
+-- Action: Insert rating thứ 2
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 11, 10, N'Bình thường', 2);
+
+-- Expected: Kiểm tra sau khi insert
+SELECT 'Sau khi insert rating thứ 2:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+SELECT order_ID, rating_ID, food_ID, Diem_danh_gia
+FROM RATING
+WHERE food_ID = 10;
+
+-- Kết quả mong đợi: Diem_danh_gia = (4 + 2) / 2 = 3.0
+
+ROLLBACK TRANSACTION;
+PRINT 'TC2 hoàn thành';
+
+-- B.3. TC3 - Update một rating -> AVG thay đổi
+PRINT '';
+PRINT 'B.3. TC3 - Update một rating -> AVG thay đổi';
+PRINT 'Mục tiêu: Khi sửa một rating, AVG phải được tính lại đúng';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Tạo 2 rating ban đầu cho món 10
+UPDATE FOOD
+SET Diem_danh_gia = 5
+WHERE food_ID = 10;
+
+DELETE FROM RATING WHERE food_ID = 10;
+
+IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = 100)
+BEGIN
+    INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
+    VALUES (100, 1, 3, N'hoàn tất', N'Test đơn 100', N'Hà Nội', 75000, 15000);
+END
+
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 10, 10, N'Món ngon', 4);
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 11, 10, N'Bình thường', 2);
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi update rating:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+
+-- Action: Update rating từ 2 lên 5
+UPDATE RATING
+SET Diem_danh_gia = 5
+WHERE order_ID = 100 AND rating_ID = 11 AND food_ID = 10;
+
+-- Expected: Kiểm tra sau khi update
+SELECT 'Sau khi update rating:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+SELECT order_ID, rating_ID, food_ID, Diem_danh_gia
+FROM RATING
+WHERE food_ID = 10;
+
+-- Kết quả mong đợi: AVG mới = (4 + 5) / 2 = 4.5
+
+ROLLBACK TRANSACTION;
+PRINT 'TC3 hoàn thành';
+
+-- B.4. TC4 - Xóa hết rating của food -> Điểm reset = 5
+PRINT '';
+PRINT 'B.4. TC4 - Xóa hết rating của food -> Điểm reset = 5';
+PRINT 'Mục tiêu: Khi không còn rating nào, Diem_danh_gia phải quay về giá trị default = 5';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Tạo 2 rating cho món 10
+UPDATE FOOD
+SET Diem_danh_gia = 5
+WHERE food_ID = 10;
+
+DELETE FROM RATING WHERE food_ID = 10;
+
+IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = 100)
+BEGIN
+    INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
+    VALUES (100, 1, 3, N'hoàn tất', N'Test đơn 100', N'Hà Nội', 75000, 15000);
+END
+
+-- Insert rating cho món 10
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 10, 10, N'Món ngon', 4);
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 11, 10, N'Bình thường', 2);
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi xóa hết rating:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+SELECT order_ID, rating_ID, food_ID, Diem_danh_gia
+FROM RATING
+WHERE food_ID = 10;
+
+-- Action: Xóa hết rating của món 10
+DELETE FROM RATING
+WHERE food_ID = 10;
+
+-- Expected: Kiểm tra sau khi xóa
+SELECT 'Sau khi xóa hết rating:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = 10;
+SELECT order_ID, rating_ID, food_ID, Diem_danh_gia
+FROM RATING
+WHERE food_ID = 10;
+
+-- Kết quả mong đợi: Diem_danh_gia = 5 (default khi không còn rating)
+
+ROLLBACK TRANSACTION;
+PRINT 'TC4 hoàn thành';
+
+-- B.5. TC5 - Insert rating cho food khác -> Không ảnh hưởng món đang test
+PRINT '';
+PRINT 'B.5. TC5 - Insert rating cho food khác -> Không ảnh hưởng';
+PRINT 'Mục tiêu: Rating của món khác không làm thay đổi Diem_danh_gia món 10';
+
+BEGIN TRANSACTION;
+
+-- Chuẩn bị: Reset điểm 2 món
+UPDATE FOOD
+SET Diem_danh_gia = 5
+WHERE food_ID IN (10, 11);
+
+DELETE FROM RATING WHERE food_ID IN (10, 11);
+
+IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = 100)
+BEGIN
+    INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
+    VALUES (100, 1, 3, N'hoàn tất', N'Test đơn 100', N'Hà Nội', 75000, 15000);
+END
+
+-- Insert rating cho món 10
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 10, 10, N'Món ngon', 4);
+
+-- Kiểm tra trước khi test
+SELECT 'Trước khi insert rating cho món khác:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID IN (10, 11);
+
+-- Action: Insert rating cho món 11
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES (100, 11, 11, N'OK', 3);
+
+-- Expected: Kiểm tra sau khi insert
+SELECT 'Sau khi insert rating cho món khác:' AS Thoi_diem;
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID IN (10, 11);
+SELECT order_ID, rating_ID, food_ID, Diem_danh_gia
+FROM RATING
+WHERE food_ID IN (10, 11);
+
+-- Kết quả mong đợi: Diem_danh_gia của món 10 không đổi (vẫn = 4)
+-- Chỉ món 11 có điểm thay đổi (từ 5 -> 3)
+
+ROLLBACK TRANSACTION;
+PRINT 'TC5 hoàn thành';
+
+PRINT '';
+PRINT '========================================';
+PRINT 'HOÀN THÀNH TẤT CẢ TESTCASE';
+PRINT '========================================';
