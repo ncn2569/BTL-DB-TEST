@@ -27,7 +27,7 @@ function showOrderMessage(msg, isError = false) {
 // Load orders from stored procedure
 async function loadOrders(customerID, trangThai) {
   const tbody = document.querySelector('#orders-table tbody');
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Đang tải...</td></tr>';
+  
 
   try {
     const url = `${API_BASE}/orders?customerID=${encodeURIComponent(customerID)}&trangThai=${encodeURIComponent(trangThai)}`;
@@ -77,6 +77,7 @@ function displayOrders(orders) {
       <td><span class="status-badge status-${order.trang_thai.replace(/\s+/g, '-')}">${order.trang_thai}</span></td>
       <td>${giaDon} đ</td>
       <td>${phiGiao} đ</td>
+      <td>${new Intl.NumberFormat('vi-VN').format(order.gia_don_hang + order.phi_giao_hang )} đ</td>
       <td>${order.dia_chi || ''}</td>
       <td>
         <button class="btn-edit-order action-btn edit" data-id="${order.order_ID}" data-status="${order.trang_thai}">Sửa</button>
