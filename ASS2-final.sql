@@ -1192,49 +1192,113 @@ BEGIN
 END;
 GO
 -----------------------------------
----- TEST MỘT SỐ TRIGGER NGHIỆP VỤ
+---- TEST TRIGGER 1
 -----------------------------------
 -- 
-INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
-VALUES
-(904, '2025-12-10', N'Giảm 30%',N'Đơn tối thiểu 50k',  30, 504, 101);
+-- TC1 – Hủy đơn + voucher còn hạn → phải hoàn
+DECLARE @vid INT, @oid INT;
 
-SELECT * FROM VOUCHER;
-SELECT * FROM ORDERS;
-SELECT * FROM CUSTOMER;
-SELECT * FROM RATING;
-SELECT * FROM FOOD;
+SELECT TOP 1 @vid = voucher_ID, @oid = order_ID
+FROM VOUCHER
+WHERE han_su_dung >= GETDATE()   -- còn hạn
+  AND order_ID IS NOT NULL;      -- đang được gán cho đơn
 
--- Set trạng thái hủy
-UPDATE ORDERS
-SET trang_thai = N'hủy'
-WHERE order_ID = 504;
+-- Reset trạng thái đơn để đảm bảo trigger kích hoạt
+UPDATE ORDERS SET trang_thai = N'đang xử lý'
+WHERE order_ID = @oid;
 
--- Kiểm tra Voucher sau khi hủy đơn
-SELECT * FROM VOUCHER WHERE voucher_ID = 904;
+-- Thực hiện cập nhật sang 'hủy'
+UPDATE ORDERS SET trang_thai = N'hủy'
+WHERE order_ID = @oid;
 
--- Thêm đơn vào Rating
-INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
-VALUES
-(501, 3, 1001, N'Ngon và nhanh.',2);
--- Xóa Rating
-DELETE RATING WHERE rating_ID= 2;
--- Cập nhật Rating
-UPDATE RATING 
-SET Diem_danh_gia = 1
-WHERE rating_ID = 3;
+-- Expected: VOUCHER.order_ID = NULL
+SELECT voucher_ID, order_ID, han_su_dung
+FROM VOUCHER
+WHERE voucher_ID = @vid;
 
-GO
+-- TC2 – Voucher hết hạn → Không hoàn
+DECLARE @vid2 INT, @oid2 INT;
+
+SELECT TOP 1 @vid2 = voucher_ID, @oid2 = order_ID
+FROM VOUCHER
+WHERE order_ID IS NOT NULL;
+
+-- Giả lập voucher hết hạn
+UPDATE VOUCHER SET han_su_dung = '2023-01-01'
+WHERE voucher_ID = @vid2;
+
+-- Reset trạng thái đơn
+UPDATE ORDERS SET trang_thai = N'đang xử lý'
+WHERE order_ID = @oid2;
+
+-- Cập nhật sang 'hủy'
+UPDATE ORDERS SET trang_thai = N'hủy'
+WHERE order_ID = @oid2;
+
+-- Expected: order_ID KHÔNG bị set NULL
+SELECT voucher_ID, order_ID, han_su_dung
+FROM VOUCHER
+WHERE voucher_ID = @vid2;
+
+-- TC3 - Đơn vốn đã 'hủy' → trigger không chạy lại
+DECLARE @oid3 INT;
+
+SELECT TOP 1 @oid3 = order_ID 
+FROM ORDERS
+WHERE trang_thai = N'hủy';
+
+-- Update lại 'hủy'
+UPDATE ORDERS SET trang_thai = N'hủy'
+WHERE order_ID = @oid3;
+
+-- Expected: Không thay đổi gì với voucher
+SELECT v.*
+FROM VOUCHER v
+WHERE v.order_ID = @oid3;
+
+
+-----------------------------------
+---- TEST TRIGGER 2
+-----------------------------------
 -- 
-SELECT * FROM FOOD; 
-SELECT * FROM ORDERS;
+-- TC4: Khi thêm rating mới → FOOD.Diem_danh_gia phải cập nhật theo AVG(rating).
 
+DECLARE @food INT = (
+    SELECT TOP 1 food_ID FROM FOOD ORDER BY food_ID
+);
+
+-- Insert rating mới
 INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
-VALUES
-(502, 2, 1000, N'Ngon và nhanh.',                      4);
-INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
-VALUES
-(502, 3, 1000, N'Ngon và nhanh.',                      3);
+VALUES (9000, 1, @food, N'Test Rating', 5);
+
+-- Expected: Điểm trung bình tăng hoặc = 5 nếu là rating đầu tiên
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = @food;
+
+
+-- TC5: Update điểm rating → trigger phải tính lại AVG.
+
+UPDATE RATING
+SET Diem_danh_gia = 2
+WHERE order_ID = 9000 AND rating_ID = 1;
+
+-- Expected: FOOD.Diem_danh_gia cập nhật lại theo AVG
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = @food;
+
+-- TC6: Xóa rating của food → trigger cập nhật điểm mới.
+
+DELETE FROM RATING
+WHERE order_ID = 9000 AND rating_ID = 1;
+
+-- Expected: Nếu không còn rating nào → Diem_danh_gia = 5
+SELECT food_ID, ten, Diem_danh_gia
+FROM FOOD
+WHERE food_ID = @food;
+
+
 ----------------------------------------------------------
 -- REGION 5: STORED PROCEDURE CRUD USERS & NGHIỆP VỤ
 -----------------------------------------------------------
