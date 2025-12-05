@@ -1354,112 +1354,231 @@ BEGIN
     );
 END;
 GO
------------------------------------
----- TEST TRIGGER 1
------------------------------------
--- 
--- TC1 – Hủy đơn + voucher còn hạn → phải hoàn
-DECLARE @vid INT, @oid INT;
+-------------------------
+-- TESTCASE  TRIGGER 1 --
+-------------------------
+-- TC1: Hủy đơn có voucher còn hạn -> Voucher.order_ID phải = NULL
+PRINT N'[TC1] Hủy đơn có voucher còn hạn → refund';
 
-SELECT TOP 1 @vid = voucher_ID, @oid = order_ID
-FROM VOUCHER
-WHERE han_su_dung >= GETDATE()   -- còn hạn
-  AND order_ID IS NOT NULL;      -- đang được gán cho đơn
+DECLARE @oid INT = 999900;
+DECLARE @vid INT = 999900;
 
--- Reset trạng thái đơn để đảm bảo trigger kích hoạt
-UPDATE ORDERS SET trang_thai = N'đang xử lý'
-WHERE order_ID = @oid;
+-- 1) Tạo order test (trạng thái 'đang xử lý' => hợp lệ để chuyển sang 'hủy')
+INSERT INTO ORDERS(order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang, ngay_tao)
+VALUES (@oid, 201, 101, N'đang xử lý', N'TC1 create', N'Test address', 100000, 15000, GETDATE());
 
--- Thực hiện cập nhật sang 'hủy'
-UPDATE ORDERS SET trang_thai = N'hủy'
-WHERE order_ID = @oid;
+-- 2) Gán voucher còn hạn vào order test
+INSERT INTO VOUCHER(voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
+VALUES (@vid, '2030-01-01', N'Voucher TC1', N'No condition', 20, @oid, 101);
 
--- Expected: VOUCHER.order_ID = NULL
-SELECT voucher_ID, order_ID, han_su_dung
-FROM VOUCHER
-WHERE voucher_ID = @vid;
+-- 3) Hủy đơn -> trigger refund chạy
+UPDATE ORDERS SET trang_thai = N'hủy' WHERE order_ID = @oid;
 
--- TC2 – Voucher hết hạn → Không hoàn
-DECLARE @vid2 INT, @oid2 INT;
+-- 4) Kiểm tra: voucher.order_ID phải = NULL (đã refund/unassign)
+SELECT voucher_ID, order_ID, han_su_dung FROM VOUCHER WHERE voucher_ID = @vid;
 
-SELECT TOP 1 @vid2 = voucher_ID, @oid2 = order_ID
-FROM VOUCHER
-WHERE order_ID IS NOT NULL;
+GO
 
--- Giả lập voucher hết hạn
-UPDATE VOUCHER SET han_su_dung = '2023-01-01'
-WHERE voucher_ID = @vid2;
+-- TC2: Hủy đơn có voucher HẾT HẠN -> voucher không bị unassign
+PRINT N'[TC2] Hủy đơn có voucher đã hết hạn → không refund';
 
--- Reset trạng thái đơn
-UPDATE ORDERS SET trang_thai = N'đang xử lý'
-WHERE order_ID = @oid2;
+DECLARE @oid2 INT = 999901;
+DECLARE @vid2 INT = 999901;
 
--- Cập nhật sang 'hủy'
-UPDATE ORDERS SET trang_thai = N'hủy'
-WHERE order_ID = @oid2;
+-- Tạo order test (đang xử lý)
+INSERT INTO ORDERS(order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang, ngay_tao)
+VALUES (@oid2, 201, 101, N'đang xử lý', N'TC2 create', N'Test address', 50000, 10000, GETDATE());
 
--- Expected: order_ID KHÔNG bị set NULL
-SELECT voucher_ID, order_ID, han_su_dung
-FROM VOUCHER
-WHERE voucher_ID = @vid2;
+-- Gán voucher đã HẾT HẠN (ngày trước hiện tại)
+INSERT INTO VOUCHER(voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
+VALUES (@vid2, '2020-01-01', N'Expired Voucher TC2', N'No condition', 10, @oid2, 101);
 
--- TC3 - Đơn vốn đã 'hủy' → trigger không chạy lại
-DECLARE @oid3 INT;
+-- Hủy order -> trigger chạy, nhưng voucher hết hạn nên không unassign
+UPDATE ORDERS SET trang_thai = N'hủy' WHERE order_ID = @oid2;
 
-SELECT TOP 1 @oid3 = order_ID 
+-- Kiểm tra: voucher.order_ID phải vẫn = @oid2 (không được refund)
+SELECT voucher_ID, order_ID, han_su_dung FROM VOUCHER WHERE voucher_ID = @vid2;
+
+GO
+
+-- TC3: Hủy đơn không có voucher -> không lỗi, không ảnh hưởng
+PRINT N'[TC3] Hủy đơn không có voucher → không đổi gì';
+
+DECLARE @oid3 INT = 999902;
+
+-- Tạo order test không gắn voucher
+INSERT INTO ORDERS(order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang, ngay_tao)
+VALUES (@oid3, 201, 101, N'đang xử lý', N'TC3 create', N'Test address', 70000, 12000, GETDATE());
+
+-- Hủy order
+UPDATE ORDERS SET trang_thai = N'hủy' WHERE order_ID = @oid3;
+
+-- Kiểm tra order vẫn tồn tại, không có voucher liên quan
+SELECT * FROM ORDERS WHERE order_ID = @oid3;
+SELECT * FROM VOUCHER WHERE order_ID = @oid3; -- expected: 0 rows
+
+GO
+
+-- TC4: Update từ hủy -> hủy (không kích hoạt refund lại)
+PRINT N'[TC4] Update từ hủy → hủy (không kích hoạt logic refund)';
+
+-- Dùng order TC1 (@oid = 999900) hoặc TC3 (@oid3 = 999902)
+-- Nếu dùng TC1:
+DECLARE @check_oid INT = 999900;
+
+-- Cập nhật lại same state 'hủy'
+UPDATE ORDERS SET trang_thai = N'hủy' WHERE order_ID = @check_oid;
+
+SELECT order_ID, trang_thai FROM ORDERS WHERE order_ID = @check_oid;
+GO
+
+-- Cleanup: xóa voucher và order test đã tạo
+DELETE FROM VOUCHER WHERE voucher_ID IN (999900, 999901);
+DELETE FROM ORDERS WHERE order_ID IN (999900, 999901, 999902);
+
+PRINT N'Cleanup done';
+GO
+
+
+
+------------------------
+-- TESTCASE TRIGGER 2 --
+------------------------
+
+PRINT N'[TC1] Không được rating khi đơn chưa hoàn tất';
+
+DECLARE @tc1_oid INT, @tc1_fid INT;
+
+-- Order chưa hoàn tất
+SELECT TOP 1 @tc1_oid = order_ID
 FROM ORDERS
-WHERE trang_thai = N'hủy';
+WHERE trang_thai <> N'hoàn tất';
 
--- Update lại 'hủy'
-UPDATE ORDERS SET trang_thai = N'hủy'
-WHERE order_ID = @oid3;
+-- Food thuộc order đó
+SELECT TOP 1 @tc1_fid = food_ID
+FROM FOOD_ORDERED
+WHERE order_ID = @tc1_oid;
 
--- Expected: Không thay đổi gì với voucher
-SELECT v.*
-FROM VOUCHER v
-WHERE v.order_ID = @oid3;
+BEGIN TRY
+    INSERT INTO RATING(order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+    VALUES(@tc1_oid, 8001, @tc1_fid, N'Test TC1', 5);
 
+    PRINT N'❌ SAi — Trigger không chặn';
+END TRY
+BEGIN CATCH
+    PRINT N'✓ ĐÚNG — Trigger chặn đúng: ' + ERROR_MESSAGE();
+END CATCH;
+GO
 
------------------------------------
----- TEST TRIGGER 2
------------------------------------
--- 
--- TC4: Khi thêm rating mới → FOOD.Diem_danh_gia phải cập nhật theo AVG(rating).
+PRINT N'[TC2] Không được rating món không có trong đơn';
 
-DECLARE @food INT = (
-    SELECT TOP 1 food_ID FROM FOOD ORDER BY food_ID
+DECLARE @tc2_oid INT, @tc2_fid INT;
+
+-- Order hoàn tất
+SELECT TOP 1 @tc2_oid = order_ID
+FROM ORDERS
+WHERE trang_thai = N'hoàn tất';
+
+-- Food KHÔNG nằm trong order
+SELECT TOP 1 @tc2_fid = food_ID
+FROM FOOD
+WHERE food_ID NOT IN (
+    SELECT food_ID FROM FOOD_ORDERED WHERE order_ID = @tc2_oid
 );
 
--- Insert rating mới
-INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
-VALUES (9000, 1, @food, N'Test Rating', 5);
+BEGIN TRY
+    INSERT INTO RATING(order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+    VALUES(@tc2_oid, 8002, @tc2_fid, N'Test TC2', 4);
 
--- Expected: Điểm trung bình tăng hoặc = 5 nếu là rating đầu tiên
-SELECT food_ID, ten, Diem_danh_gia
-FROM FOOD
-WHERE food_ID = @food;
+    PRINT N'❌ SAI — Trigger không chặn';
+END TRY
+BEGIN CATCH
+    PRINT N'✓ ĐÚNG — Trigger chặn chính xác: ' + ERROR_MESSAGE();
+END CATCH;
+GO
 
+PRINT N'[TC3] Rating hợp lệ';
 
--- TC5: Update điểm rating → trigger phải tính lại AVG.
+DECLARE @tc3_oid INT, @tc3_fid INT;
 
-UPDATE RATING
-SET Diem_danh_gia = 2
-WHERE order_ID = 9000 AND rating_ID = 1;
+-- Lấy order hoàn tất
+SELECT TOP 1 @tc3_oid = order_ID
+FROM ORDERS
+WHERE trang_thai = N'hoàn tất';
 
--- Expected: FOOD.Diem_danh_gia cập nhật lại theo AVG
-SELECT food_ID, ten, Diem_danh_gia
-FROM FOOD
-WHERE food_ID = @food;
+-- Lấy food thuộc order đó
+SELECT TOP 1 @tc3_fid = food_ID
+FROM FOOD_ORDERED
+WHERE order_ID = @tc3_oid;
 
--- TC6: Xóa rating của food → trigger cập nhật điểm mới.
+BEGIN TRY
+    INSERT INTO RATING(order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+    VALUES(@tc3_oid, 8003, @tc3_fid, N'Hợp lệ', 5);
 
-DELETE FROM RATING
-WHERE order_ID = 9000 AND rating_ID = 1;
+    PRINT N'✓ THÀNH CÔNG — Rating hợp lệ được chấp nhận';
 
--- Expected: Nếu không còn rating nào → Diem_danh_gia = 5
-SELECT food_ID, ten, Diem_danh_gia
-FROM FOOD
-WHERE food_ID = @food;
+    -- Kiểm tra điểm món
+    SELECT food_ID, ten, Diem_danh_gia
+    FROM FOOD
+    WHERE food_ID = @tc3_fid;
+END TRY
+BEGIN CATCH
+    PRINT N'❌ LỖI: ' + ERROR_MESSAGE();
+END CATCH;
+GO
+
+PRINT N'[TC4] Update rating → FOOD phải cập nhật lại';
+
+DECLARE @tc4_oid INT, @tc4_rid INT, @tc4_fid INT;
+
+-- Lấy rating bất kỳ
+SELECT TOP 1 
+    @tc4_oid = order_ID,
+    @tc4_rid = rating_ID,
+    @tc4_fid = food_ID
+FROM RATING;
+
+IF @tc4_oid IS NOT NULL
+BEGIN
+    PRINT N'Điểm trước:';
+    SELECT food_ID, Diem_danh_gia FROM FOOD WHERE food_ID = @tc4_fid;
+
+    UPDATE RATING
+    SET Diem_danh_gia = CASE WHEN Diem_danh_gia = 5 THEN 3 ELSE 5 END
+    WHERE order_ID = @tc4_oid AND rating_ID = @tc4_rid;
+
+    PRINT N'Điểm sau:';
+    SELECT food_ID, Diem_danh_gia FROM FOOD WHERE food_ID = @tc4_fid;
+END
+ELSE
+    PRINT N'Không có rating để test TC4';
+GO
+
+PRINT N'[TC5] Xóa rating → FOOD cập nhật lại điểm';
+
+DECLARE @tc5_oid INT, @tc5_rid INT, @tc5_fid INT;
+
+SELECT TOP 1
+    @tc5_oid = order_ID,
+    @tc5_rid = rating_ID,
+    @tc5_fid = food_ID
+FROM RATING;
+
+IF @tc5_oid IS NOT NULL
+BEGIN
+    PRINT N'Điểm trước khi xóa:';
+    SELECT food_ID, Diem_danh_gia FROM FOOD WHERE food_ID = @tc5_fid;
+
+    DELETE FROM RATING
+    WHERE order_ID = @tc5_oid AND rating_ID = @tc5_rid;
+
+    PRINT N'Điểm sau khi xóa:';
+    SELECT food_ID, Diem_danh_gia FROM FOOD WHERE food_ID = @tc5_fid;
+END
+ELSE
+    PRINT N'Không có rating để test TC5';
+GO
+
 
 
 ----------------------------------------------------------
