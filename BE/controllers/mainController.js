@@ -256,23 +256,7 @@ exports.getCustomerSpending = async (req, res) => {
     const total = result.recordset[0].Total;
 
     let message = null;
-    if (total < 0) {
-      switch (total) {
-        case -1:
-          message = 'Lỗi: Tham số đầu vào NULL.';
-          break;
-        case -2:
-          message = 'Lỗi: Khoảng thời gian không hợp lệ (FromDate > ToDate).';
-          break;
-        case -3:
-          message = 'Lỗi: Khách hàng không tồn tại.';
-          break;
-        default:
-          message = 'Lỗi không xác định.';
-      }
-    } else {
-      message = `Tổng chi tiêu của khách hàng #${customerID} là ${total} (từ ${fromDate} đến ${toDate}).`;
-    }
+    message = `${total} (từ ${fromDate} đến ${toDate}).`;
 
     res.json({ success: true, total, message });
   } catch (err) {

@@ -32,11 +32,11 @@ async function handleSPForm(e) {
       totalStr.includes('THAM SỐ KHÔNG NULL') ||
       totalStr.includes('KHOẢNG THỜI GIAN KHÔNG HỢP LỆ') ||
       totalStr.includes('KHÁCH HÀNG KHÔNG TỒN TẠI');
-  if (isLogicError) { // Ném lỗi để nhảy xuống catch và hiển thị màu đỏ 
-    msgDiv.textContent = totalStr; 
-    msgDiv.className = 'message error'; 
-    msgDiv.style.display = 'block'; return; 
-  }
+    if (isLogicError) { // Ném lỗi để nhảy xuống catch và hiển thị màu đỏ 
+      msgDiv.textContent = totalStr; 
+      msgDiv.className = 'message error'; 
+      msgDiv.style.display = 'block'; return; 
+    }
     const total = parseFloat(data.total || 0);
     let message = data.message;
     
