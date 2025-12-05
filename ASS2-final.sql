@@ -606,23 +606,6 @@ GO
 -----------------------------------------------------------
 
 -- Trigger 1: Hoàn tiền Voucher khi đơn bị hủy --
-/*
-Nghiệp vụ: 
-Nếu đơn có sử dụng voucher, và đơn bị hủy (OrderStatus đổi sang "CANCELED"), 
-thì hệ thống phải tự động trả lại (refund) phần giá trị voucher đã trừ trước đó, 
-nhưng chỉ khi voucher vẫn còn hiệu lực (not expired).
-
-Ràng buộc:
-- Orders.VoucherID NOT NULL
-
-- Orders.Status chuyển từ ≠ “CANCELED” sang “CANCELED”
-
-- Voucher chưa hết hạn tại thời điểm hủy
-
-- RefundAmount = Min(UsedValue, Voucher.MaxValue)
-
-- Thực hiện hoàn vào bảng VoucherUsageLog hoặc cập nhật Voucher.RemainingValue
-*/
 
 IF OBJECT_ID('trg_refund_voucher_on_cancel', 'TR') IS NOT NULL
     DROP TRIGGER trg_refund_voucher_on_cancel;
@@ -657,7 +640,7 @@ BEGIN
 END;
 GO
 
--- trigger 2: cập nhật điểm raitng được food khi có sự thay đổi ở rating
+-- Trigger 2: Cập nhật điểm raitng được food khi có sự thay đổi ở rating --
 
 IF OBJECT_ID('trg_UpdateFoodRating', 'TR') IS NOT NULL
     DROP TRIGGER trg_UpdateFoodRating;
@@ -678,7 +661,7 @@ BEGIN
                 FROM RATING r
                 WHERE r.food_ID = f.food_ID
             ),
-            3   -- điểm mặc định nếu không còn rating
+            3   -- Điểm mặc định nếu không còn rating
         )
     FROM FOOD f
     WHERE f.food_ID IN (
@@ -702,20 +685,21 @@ SELECT * FROM CUSTOMER;
 SELECT * FROM RATING;
 SELECT * FROM FOOD;
 
--- set trạng thái hủy
+-- Set trạng thái hủy
 UPDATE ORDERS
 SET trang_thai = N'hủy'
 WHERE order_ID = 504;
+
 -- Kiểm tra Voucher sau khi hủy đơn
 SELECT * FROM VOUCHER WHERE voucher_ID = 904;
 
--- thêm đơn vào rating
+-- Thêm đơn vào Rating
 INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
 VALUES
 (501, 3, 1001, N'Ngon và nhanh.',2);
--- Xóa rating
+-- Xóa Rating
 DELETE RATING WHERE rating_ID= 2;
--- Cập nhật rating
+-- Cập nhật Rating
 UPDATE RATING 
 SET Diem_danh_gia = 1
 WHERE rating_ID = 3;
