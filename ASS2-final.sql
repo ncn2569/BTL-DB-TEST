@@ -4,6 +4,7 @@
 
 -- Xóa các bảng con trước, bảng cha sau để tránh lỗi khóa ngoại
 IF OBJECT_ID('DELIVERING', 'U') IS NOT NULL DROP TABLE DELIVERING;
+--IF OBJECT_ID('RATING_FOOD', 'U') IS NOT NULL DROP TABLE RATING_FOOD;--để đây để nếu ai còn bảng rating food thì bỏ
 IF OBJECT_ID('RATING', 'U') IS NOT NULL DROP TABLE RATING;
 IF OBJECT_ID('FOOD_ORDERED', 'U') IS NOT NULL DROP TABLE FOOD_ORDERED;
 IF OBJECT_ID('VOUCHER', 'U') IS NOT NULL DROP TABLE VOUCHER;
@@ -63,9 +64,8 @@ CREATE TABLE RESTAURANT(
     Foreign key (user_ID) References USERS(ID)
     ON DELETE CASCADE
     ON UPDATE CASCADE,
-
-    
-    Thoi_gian_mo_cua   TIME(0) NOT NULL,  -- TIME(0) = HH:MM:SS, không phần thập phân giây
+-- TIME(0) = HH:MM:SS, không phần thập phân giây
+    Thoi_gian_mo_cua   TIME(0) NOT NULL,  
     Thoi_gian_dong_cua TIME(0) NOT NULL,
 
     -- giờ mở cửa < giờ đóng cửa
@@ -130,10 +130,10 @@ CREATE TABLE ORDERS (
     trang_thai      NVARCHAR(50) NOT NULL ,
     -- Trạng thái đơn: đang xử lý / đang giao / hoàn tất / hủy
     CHECK ( trang_thai IN (N'đang xử lý', N'đang giao',N'hoàn tất', N'hủy')),
-
+    -- đổi từ cascade thành no action không thể xóa nhà hàng khi đang có đơn hàng ứng với nhà hàng đó
     FOREIGN KEY (restaurant_ID) REFERENCES RESTAURANT(user_ID)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
+        ON DELETE NO ACTION
+        ON UPDATE NO ACTION,
     FOREIGN KEY (customer_ID) REFERENCES CUSTOMER(user_ID)
         ON DELETE NO ACTION
         ON UPDATE NO ACTION
@@ -359,9 +359,9 @@ BEGIN
         RETURN;
     END
 END;
-
--- RATING: ngày đánh giá phải >= ngày tạo đơn
 GO
+
+-- RATING: ngày đánh giá phải > ngày tạo đơn
 CREATE TRIGGER trg_rating_date
 ON RATING 
 AFTER INSERT, UPDATE
@@ -400,18 +400,9 @@ BEGIN
         ROLLBACK TRANSACTION;
         RETURN; 
     END
-    IF EXISTS (
-        SELECT order_ID
-        FROM RATING
-        GROUP BY order_ID
-        HAVING COUNT(*) > 1
-    )
-    BEGIN 
-        RAISERROR (N'Mỗi đơn hàng chỉ được đánh giá 1 lần.', 16, 1);
-        ROLLBACK TRANSACTION;
-        RETURN; 
-    END
 END;
+GO
+
 
 -------------------------
 -- TRIGGER TRÊN CÁC BẢNG KHÁC
@@ -545,62 +536,70 @@ INSERT INTO RESTAURANT (user_ID, Thoi_gian_mo_cua, Thoi_gian_dong_cua, Trang_tha
 (204, '10:00', '23:00', N'đang hoạt động'),
 (205, '06:30', '20:30', N'đang hoạt động');
 INSERT INTO CUSTOMER (user_ID) VALUES
-(3),
-(4);
-
--- SHIPPER: shipper mẫu
-INSERT INTO SHIPPER (user_ID, bien_so_xe, diem_danh_gia, trang_thai) VALUES
-(6, '29-A1-12345', 4.5, N'trực tuyến');
-
--- FOOD: danh sách món ăn
-INSERT INTO FOOD (food_ID, gia, ten, mo_ta, trang_thai, anh) VALUES
-(10, 30000, N'Bánh mì thịt', N'Bánh mì Việt Nam', N'còn hàng', 'banhmi.jpg'),
-(11, 45000, N'Phở bò', N'Phở truyền thống', N'còn hàng', 'pho.jpg'),
-(12, 25000, N'Trà đá', N'Nước giải khát', N'còn hàng', 'trada.jpg');
-
--- FOOD_BELONG: món ăn thuộc nhà hàng nào
+(101), (102), (103), (104), (105);
+INSERT INTO SHIPPER (user_ID, bien_so_xe, trang_thai) VALUES
+(301, '30-A1-12345', N'trực tuyến'),
+(302, '30-A2-67890', N'trực tuyến'),
+(303, '30-B1-11111', N'trực tuyến'),
+(304, '30-B2-22222', N'trực tuyến'),
+(305, '30-B3-33333', N'đang bận');
+INSERT INTO ADMIN (user_ID, quyen_han) VALUES
+(1, N'Quản trị hệ thống'),
+(2, N'Quản lý người dùng'),
+(3, N'Quản lý nhà hàng'),
+(4, N'Quản lý khuyến mãi'),
+(5, N'Hỗ trợ khách hàng');
+INSERT INTO FOOD (food_ID, gia, ten, mo_ta, trang_thai, anh, diem_danh_gia) VALUES
+(1000, 30000, N'Bánh mì thịt', N'Bánh mì Việt Nam', N'còn hàng', 'banhmi.jpg', 4.8),
+(1001, 45000, N'Phở bò', N'Phở truyền thống', N'còn hàng', 'pho.jpg', 4.9),
+(1002, 25000, N'Trà đá', N'Nước giải khát', N'còn hàng', 'trada.jpg', 4.0),
+(1003, 50000, N'Cơm gà xối mỡ', N'Cơm nóng, gà giòn', N'còn hàng', 'comga.jpg', 4.4),
+(1004, 20000, N'Nước cam', N'Cam tươi nguyên chất', N'hết hàng', 'nuoccam.jpg', 4.2),
+(1005, 35000, N'Bún chả', N'Bún chả Hà Nội', N'còn hàng', 'buncha.jpg', 4.5),
+(1006, 60000, N'Pizza hải sản', N'Pizza cỡ nhỏ', N'còn hàng', 'pizza.jpg', 3.9),
+(1007, 15000, N'Trà sữa trân châu', N'Trà sữa truyền thống', N'còn hàng', 'trasua.jpg', 4.1),
+(1008, 40000, N'Gà rán', N'Gà giòn cay', N'còn hàng', 'garan.jpg', 4.6),
+(1009, 25000, N'Bánh flan', N'Món tráng miệng', N'còn hàng', 'flan.jpg', 4.7);
 INSERT INTO FOOD_BELONG VALUES
-(10, 1),
-(11, 1),
-(12, 1),
-(10, 5);
-
--- ORDERS: dữ liệu đơn hàng
+(1000, 201), (1001, 201), (1002, 201),
+(1003, 202), (1004, 202),
+(1005, 203),
+(1006, 204), (1007, 204),
+(1008, 205), (1009, 205);
 INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
 VALUES
-(100, 1, 3, N'đang xử lý', N'Không cay', N'Hà Nội', 75000, 15000),
-(101, 1, 4, N'hoàn tất', NULL, N'Hồ Chí Minh', 45000, 10000);
-
--- FOOD_ORDERED: món trong từng đơn
+(500, 201, 101, N'đang xử lý', N'Không cay', N'Hà Nội', 75000, 15000),
+(501, 201, 102, N'hoàn tất', N'Ít nước', N'TP.HCM', 60000, 10000),
+(502, 203, 103, N'hoàn tất', N'Thêm hành', N'Đà Nẵng', 80000, 12000),
+(503, 203, 104, N'đang giao', N'Giao nhanh', N'Cần Thơ', 90000, 15000),
+(504, 204, 105, N'đang xử lý', NULL, N'Huế', 70000, 10000);
 INSERT INTO FOOD_ORDERED VALUES
-(10, 100),
-(11, 100),
-(12, 101);
-
--- DELIVERING: đơn đang được shipper giao
-INSERT INTO DELIVERING (shipper_ID, order_ID)
+(1000, 500),
+(1001, 501),
+(1003, 502),
+(1005, 503),
+(1006, 504);
+INSERT INTO DELIVERING (shipper_ID, order_ID) VALUES
+(301, 500),
+(302, 503),
+(303, 504);
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
 VALUES
-(6, 100);
-
--- RATING: đánh giá cho đơn
-INSERT INTO RATING (order_ID, rating_ID, Noi_dung, Diem_danh_gia)
-VALUES
-(101, 1, N'Ngon và nhanh', 5);
-
--- RATING_FOOD: đánh giá món theo đơn
-INSERT INTO RATING_FOOD (order_ID, rating_ID, food_ID)
-VALUES
-(101, 1, 12);
-
--- PARENT_RESTAURANT: quan hệ nhà hàng cha–con
-INSERT INTO PARENT_RESTAURANT (parent_id, child_id)
-VALUES
-(1, 5);
-
--- VOUCHER: dữ liệu voucher mẫu
+(501, 1, 1001, N'Phở ngon, ship nhanh.', 5),
+(502, 1, 1003, N'Cơm gà ngon, gói kỹ.', 4);
+INSERT INTO PARENT_RESTAURANT (parent_id, child_id) VALUES
+(201, 202),
+(201, 203),
+(204, 205);
 INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
 VALUES
-(200, '2026-01-01', N'Giảm 30%', N'Đơn tối thiểu 50k', 30, 101, 4);
+(900, '2026-01-01', N'Giảm 30%', N'Đơn tối thiểu 50k', 30, 501, 102),
+(901, '2026-06-01', N'Giảm 20%', N'Đơn tối thiểu 80k', 20, 502, 103),
+(902, '2026-12-31', N'Freeship 100%', N'Đơn tối thiểu 0k', 100, NULL, 104),
+(903, '2026-03-15', N'Giảm 10%', N'Đơn tối thiểu 100k', 10, NULL, 105);
+
+
+GO
 
 -----------------------------------------------------------
 -- REGION 4: TRIGGER NGHIỆP VỤ 
@@ -671,157 +670,68 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE s
-    SET s.diem_danh_gia = (
-        SELECT AVG(CAST(r.Diem_danh_gia AS DECIMAL(3,1)))
-        FROM RATING r
-        JOIN DELIVERING d ON r.order_ID = d.order_ID
-        WHERE d.shipper_ID = s.user_ID
-    )
-    FROM SHIPPER s
-    WHERE s.user_ID IN (
-        SELECT d.shipper_ID 
-        FROM inserted i
-        JOIN DELIVERING d ON i.order_ID = d.order_ID
+    UPDATE f
+    SET f.Diem_danh_gia =
+        ISNULL(
+            (
+                SELECT AVG(CAST(r.Diem_danh_gia AS DECIMAL(3,2)))
+                FROM RATING r
+                WHERE r.food_ID = f.food_ID
+            ),
+            3   -- điểm mặc định nếu không còn rating
+        )
+    FROM FOOD f
+    WHERE f.food_ID IN (
+        SELECT food_ID FROM inserted
+        UNION
+        SELECT food_ID FROM deleted
     );
 END;
 GO
 -----------------------------------
 ---- TEST MỘT SỐ TRIGGER NGHIỆP VỤ
 -----------------------------------
--- Giả sử đơn có 101 voucher
-SELECT * FROM VOUCHER WHERE order_ID = 101;
+-- 
+INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
+VALUES
+(904, '2025-12-10', N'Giảm 30%',N'Đơn tối thiểu 50k',  30, 504, 101);
+
+SELECT * FROM VOUCHER;
+SELECT * FROM ORDERS;
+SELECT * FROM CUSTOMER;
+SELECT * FROM RATING;
+SELECT * FROM FOOD;
 
 -- set trạng thái hủy
 UPDATE ORDERS
 SET trang_thai = N'hủy'
-WHERE order_ID = 101;
-
+WHERE order_ID = 504;
 -- Kiểm tra Voucher sau khi hủy đơn
-SELECT * FROM VOUCHER WHERE voucher_ID = 200;
+SELECT * FROM VOUCHER WHERE voucher_ID = 904;
 
----------------------------------------------------
-
--- Test: thêm rating mới cho đơn 100 (do shipper 6 giao) -> điểm shipper cập nhật
-SELECT * FROM SHIPPER;
-SELECT * FROM RATING;
-INSERT INTO RATING(order_ID, rating_ID, Noi_dung, Diem_danh_gia)
-VALUES (100, 2, N'Thái độ tốt', 4);
-INSERT INTO RATING(order_ID, rating_ID, Noi_dung, Diem_danh_gia)
-VALUES (100, 3, N'Thái độ tốt', 5);
-SELECT * FROM SHIPPER WHERE user_ID = 6;
--- Kết quả: diem_danh_gia cập nhật = AVG(5, 4) = 4.5
-
------ TEST TRIGGER TRÊN DELIVERING / FOOD / VOUCHER -----
-
-GO
--- Đổi shipper 6 sang trạng thái ngoại tuyến
-UPDATE SHIPPER
-SET trang_thai = N'ngoại tuyến'
-WHERE user_ID = 6;
-
--- Tạo đơn 301
-INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
-VALUES (301, 1, 3, N'đang xử lý', N'Test đơn 301', N'Hà Nội', 70000, 10000);
-
--- Thử gán shipper 6 giao đơn 301 -> dự kiến lỗi do shipper không trực tuyến
-INSERT INTO DELIVERING (shipper_ID, order_ID)
-VALUES (6, 301);
-GO
-
--- Kiểm tra
-SELECT * FROM DELIVERING WHERE order_ID = 301;
-SELECT user_ID, trang_thai FROM SHIPPER WHERE user_ID = 6;
-SELECT * FROM USERS; 
-
--- Đảm bảo shipper 6 đang 'trực tuyến'
-UPDATE SHIPPER
-SET trang_thai = N'trực tuyến'
-WHERE user_ID = 6;
-
--- Tạo đơn mới 300 cho nhà hàng 1, khách 3
-INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang)
-VALUES (300, 1, 3, N'đang xử lý', N'Test đơn 300', N'Hà Nội', 60000, 10000);
-
--- Gán shipper 6 giao đơn 300 (hợp lệ)
-INSERT INTO DELIVERING (shipper_ID, order_ID)
-VALUES (6, 300);
-
--- Kiểm tra kết quả
-SELECT * FROM DELIVERING;
-SELECT user_ID, diem_danh_gia, trang_thai FROM SHIPPER WHERE user_ID = 6;
-
-----------------------
--- TEST TRIGGER FOOD
-----------------------
-UPDATE FOOD
-SET trang_thai = N'còn hàng'
-WHERE food_ID = 10;
-
--- Thêm món 10 vào đơn 100 (hợp lệ)
-INSERT INTO FOOD_ORDERED (food_ID, order_ID)
-VALUES (10, 101);
-
--- Kiểm tra kết quả
-SELECT * FROM FOOD_ORDERED WHERE order_ID = 100;
-
--- Đặt món 11 sang trạng thái 'hết hàng'
-GO
-UPDATE FOOD
-SET trang_thai = N'hết hàng'
-WHERE food_ID = 11;
-
--- Thử thêm món 11 (hết hàng) vào đơn 100 -> dự kiến lỗi
-INSERT INTO FOOD_ORDERED (food_ID, order_ID)
-VALUES (11, 101);
-
--- Kiểm tra xem có lỡ chèn vào không
-SELECT * FROM FOOD_ORDERED WHERE order_ID = 100 AND food_ID = 11;
-GO
-
----------------------------------------------------
--- TEST TRIGGER VOUCHER: KHÔNG CHO ÁP DỤNG SAU HẠN
----------------------------------------------------
-GO
-INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, 
-                     dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
+-- thêm đơn vào rating
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
 VALUES
-(
-    903,
-    '2025-12-31',              -- hạn sử dụng
-    N'TC_VOUCHER_4 - Giảm 25%',
-    N'Đơn tối thiểu 200k',
-    25,
-    NULL,
-    3
-);
+(501, 3, 1001, N'Ngon và nhanh.',2);
+-- Xóa rating
+DELETE RATING WHERE rating_ID= 2;
+-- Cập nhật rating
+UPDATE RATING 
+SET Diem_danh_gia = 1
+WHERE rating_ID = 3;
 
--- Tạo đơn với ngày tạo SAU hạn sử dụng voucher
-INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, 
-                    gia_don_hang, phi_giao_hang, ngay_tao)
-VALUES
-(
-    811,
-    1,
-    3,
-    N'đang xử lý',
-    N'TC_VOUCHER_4',
-    N'Hà Nội',
-    250000,
-    20000,
-    '2026-01-05'                -- > 2025-12-31
-);
-
--- Thử gán voucher 903 cho đơn 811 (dự kiến lỗi)
-UPDATE VOUCHER
-SET order_ID = 811
-WHERE voucher_ID = 903;
-
--- Kỳ vọng: trigger báo lỗi và order_ID của voucher 903 vẫn là NULL
-SELECT 'VOUCHER' AS TableName, * FROM VOUCHER WHERE voucher_ID = 903;
 GO
+-- 
+SELECT * FROM FOOD; 
+SELECT * FROM ORDERS;
 
------------------------------------------------------------
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES
+(502, 2, 1000, N'Ngon và nhanh.',                      4);
+INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
+VALUES
+(502, 3, 1000, N'Ngon và nhanh.',                      3);
+----------------------------------------------------------
 -- REGION 5: STORED PROCEDURE CRUD USERS & NGHIỆP VỤ
 -----------------------------------------------------------
 
@@ -891,27 +801,64 @@ BEGIN
         IF PATINDEX('%[^A-Za-z0-9]%', @Password) = 0
             THROW 50010, N'Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.', 1;
 
-		-- Tài khoản ngân hàng: không rỗng, chỉ chứa số, 10–16 số
-		IF @TKNH IS NULL 
-            THROW 50014, N'Số tài khoản ngân hàng không được để trống.', 1;
+        IF @TKNH LIKE '%[^0-9]%' OR LEN(@TKNH) < 10 OR LEN(@TKNH) > 16
+            THROW 50011, N'Số tài khoản ngân hàng không hợp lệ.', 1;
 
-        IF @TKNH LIKE '%[^0-9]%'
-            THROW 50015, N'Số tài khoản ngân hàng chỉ được chứa chữ số.', 1;
+        IF LTRIM(RTRIM(@Dia_chi)) = ''
+            THROW 50012, N'Địa chỉ không được để trống.', 1;
 
-        IF LEN(@TKNH) < 10 OR LEN(@TKNH) > 16
-            THROW 50016, N'Số tài khoản ngân hàng phải có từ 10 đến 16 chữ số.', 1;
+        IF @vai_tro NOT IN ('RESTAURANT','SHIPPER','CUSTOMER','ADMIN')
+            THROW 50013, N'Vai trò không hợp lệ.', 1;
 
-		-- Địa chỉ: không rỗng
-		IF @Dia_chi IS NULL OR LTRIM(RTRIM(@Dia_chi)) = ''
-            THROW 50017, N'Địa chỉ không được để trống.', 1;
+        -------------------------------------------------------------------
+        -- 3️⃣ KIỂM TRA TRƯỚC DỮ LIỆU THEO VAI TRÒ
+        -------------------------------------------------------------------
+        IF @vai_tro = 'RESTAURANT'
+        BEGIN
+            IF @Thoi_gian_mo_cua IS NULL OR @Thoi_gian_dong_cua IS NULL OR @Trang_thai_rest IS NULL
+                THROW 50014, N'Nhà hàng cần nhập giờ mở cửa, đóng cửa và trạng thái.', 1;
 
-		-- Thêm dữ liệu sau khi kiểm tra điều kiện
-		INSERT INTO USERS (ID, Ho_ten, Email, SDT, Password, TKNH, Dia_chi)
-        VALUES (@ID, @Ho_ten, @Email, @SDT, @Password, @TKNH, @Dia_chi);
-	END TRY
-    
-    -- Bắt lỗi và ném lại (THROW giữ nguyên thông tin lỗi gốc)
-	BEGIN CATCH
+            IF @Thoi_gian_mo_cua >= @Thoi_gian_dong_cua
+                THROW 50015, N'Giờ mở cửa phải nhỏ hơn giờ đóng cửa.', 1;
+
+            IF @Trang_thai_rest NOT IN (N'đang hoạt động', N'tạm nghỉ', N'đóng cửa')
+                THROW 50016, N'Trạng thái nhà hàng không hợp lệ.', 1;
+        END
+        ELSE IF @vai_tro = 'SHIPPER'
+        BEGIN
+            IF @bien_so_xe IS NULL OR @trang_thai_ship IS NULL
+                THROW 50017, N'Shipper cần nhập biển số xe và trạng thái.', 1;
+
+            IF @trang_thai_ship NOT IN (N'trực tuyến', N'ngoại tuyến', N'đang bận')
+                THROW 50018, N'Trạng thái shipper không hợp lệ.', 1;
+            IF @bien_so_xe NOT LIKE '[0-9][0-9]-[A-Z][0-9]-[0-9][0-9][0-9][0-9][0-9]%'
+               AND @bien_so_xe NOT LIKE '[0-9][0-9]-[A-Z][A-Z]-[0-9][0-9][0-9][0-9][0-9]%'
+               THROW 50180, N'Biển số xe không hợp lệ.', 1;
+        END
+        ELSE IF @vai_tro = 'ADMIN'
+        BEGIN
+            IF @quyen_han IS NULL OR LTRIM(RTRIM(@quyen_han)) = ''
+                THROW 50019, N'Quyền hạn ADMIN không được để trống.', 1;
+        END
+
+        -------------------------------------------------------------------
+        -- 4️⃣ CHỈ KHI TẤT CẢ HỢP LỆ → MỚI THÊM DỮ LIỆU
+        -------------------------------------------------------------------
+        INSERT INTO USERS (ID, Ho_ten, Email, SDT, Password, TKNH, Dia_chi, vai_tro)
+        VALUES (@ID, @Ho_ten, @Email, @SDT, @Password, @TKNH, @Dia_chi, @vai_tro);
+
+        IF @vai_tro = 'RESTAURANT'
+            INSERT INTO RESTAURANT VALUES(@ID, @Thoi_gian_mo_cua, @Thoi_gian_dong_cua, @Trang_thai_rest);
+        ELSE IF @vai_tro = 'CUSTOMER'
+            INSERT INTO CUSTOMER VALUES(@ID);
+        ELSE IF @vai_tro = 'SHIPPER'
+            INSERT INTO SHIPPER VALUES(@ID, @bien_so_xe, @trang_thai_ship);
+        ELSE IF @vai_tro = 'ADMIN'
+            INSERT INTO ADMIN VALUES(@ID, @quyen_han);
+
+        PRINT N'Thêm người dùng mới thành công!';
+    END TRY
+    BEGIN CATCH
         THROW;
     END CATCH
 END;
@@ -985,19 +932,51 @@ BEGIN
         IF PATINDEX('%[^A-Za-z0-9]%', @Password) = 0
             THROW 50030, N'Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.', 1;
 
-		-- TKNH: không rỗng, chỉ số, 10–16
-		IF @TKNH IS NULL
-            THROW 50115, N'Số tài khoản ngân hàng không được để trống.', 1;
+        IF @TKNH IS NULL OR @TKNH LIKE '%[^0-9]%' OR LEN(@TKNH) < 10 OR LEN(@TKNH) > 16
+            THROW 50031, N'Số tài khoản ngân hàng không hợp lệ.', 1;
 
-        IF @TKNH LIKE '%[^0-9]%'
-            THROW 50116, N'Số tài khoản ngân hàng chỉ được chứa chữ số.', 1;
+        IF @Dia_chi IS NULL OR LTRIM(RTRIM(@Dia_chi)) = ''
+            THROW 50032, N'Địa chỉ không được để trống.', 1;
 
-        IF LEN(@TKNH) < 10 OR LEN(@TKNH) > 16
-            THROW 50117, N'Số tài khoản ngân hàng phải có từ 10 đến 16 chữ số.', 1;
+        -------------------------------------------------------------------
+        -- 3️⃣ KIỂM TRA RIÊNG CHO TỪNG VAI TRÒ
+        -------------------------------------------------------------------
+        IF @vai_tro = 'RESTAURANT'
+        BEGIN
+            IF @Thoi_gian_mo_cua IS NULL OR @Thoi_gian_dong_cua IS NULL OR @Trang_thai_rest IS NULL
+                THROW 50033, N'Nhà hàng cần nhập giờ mở cửa, đóng cửa và trạng thái.', 1;
 
-		-- Địa chỉ: không rỗng
-		IF @Dia_chi IS NULL OR LTRIM(RTRIM(@Dia_chi)) = ''
-            THROW 50118, N'Địa chỉ không được để trống.', 1;
+            IF @Thoi_gian_mo_cua >= @Thoi_gian_dong_cua
+                THROW 50034, N'Giờ mở cửa phải nhỏ hơn giờ đóng cửa.', 1;
+
+            IF @Trang_thai_rest NOT IN (N'đang hoạt động', N'tạm nghỉ', N'đóng cửa')
+                THROW 50035, N'Trạng thái nhà hàng không hợp lệ.', 1;
+
+            UPDATE RESTAURANT
+            SET Thoi_gian_mo_cua = @Thoi_gian_mo_cua,
+                Thoi_gian_dong_cua = @Thoi_gian_dong_cua,
+                Trang_thai = @Trang_thai_rest
+            WHERE user_ID = @ID;
+        END
+        ELSE IF @vai_tro = 'SHIPPER'
+        BEGIN
+            IF @bien_so_xe IS NULL OR @trang_thai_ship IS NULL
+                THROW 50036, N'Shipper cần nhập biển số xe và trạng thái.', 1;
+
+            IF @trang_thai_ship NOT IN (N'trực tuyến', N'ngoại tuyến', N'đang bận')
+                THROW 50037, N'Trạng thái shipper không hợp lệ.', 1;
+            IF @bien_so_xe NOT LIKE '[0-9][0-9]-[A-Z][0-9]-[0-9][0-9][0-9][0-9][0-9]%'
+               AND @bien_so_xe NOT LIKE '[0-9][0-9]-[A-Z][A-Z]-[0-9][0-9][0-9][0-9][0-9]%'
+               THROW 50370, N'Biển số xe không hợp lệ.', 1;
+            UPDATE SHIPPER
+            SET bien_so_xe = @bien_so_xe,
+                trang_thai = @trang_thai_ship
+            WHERE user_ID = @ID;
+        END
+        ELSE IF @vai_tro = 'ADMIN'
+        BEGIN
+            IF @quyen_han IS NULL OR LTRIM(RTRIM(@quyen_han)) = ''
+                THROW 50038, N'Quyền hạn ADMIN không được để trống.', 1;
 
             UPDATE ADMIN
             SET quyen_han = @quyen_han
@@ -1073,11 +1052,7 @@ BEGIN
 		WHERE ID = @UserID;
     END TRY
     BEGIN CATCH
-        DECLARE @ErrMsg NVARCHAR(4000), @ErrSeverity INT;
-        SELECT	@ErrMsg = ERROR_MESSAGE(),
-				@ErrSeverity = ERROR_SEVERITY();
-
-        RAISERROR (@ErrMsg, @ErrSeverity, 1);
+        THROW
     END CATCH
 END;
 GO
@@ -1099,17 +1074,20 @@ EXEC proc_InsertUser
     @Thoi_gian_dong_cua = '22:00',
     @Trang_thai_rest = N'đang hoạt động';
 
-EXEC UpdateUser
-    @ID        = 7,
-    @Ho_ten    = N'Phạm Nhân',
-    @Email     = 'nhan.phamhong.updated@hcmut.edu.vn',
-    @SDT       = '0911223344',
-    @Password  = 'NewPass@123',
-    @TKNH      = '999888777666',
-    @Dia_chi   = N'Thủ Đức, TP.HCM';
+EXEC proc_UpdateUser
+    @ID = 1001,
+    @Ho_ten = N'Nhà Hàng Gió Biển Mới',
+    @Email = 'gionbien_new@res.com',
+    @SDT = '0909999999',
+    @Password = 'New@1234',
+    @TKNH = '123123123123',
+    @Dia_chi = N'Ba Đình, Hà Nội',
+    @Thoi_gian_mo_cua = '07:30',
+    @Thoi_gian_dong_cua = '21:30',
+    @Trang_thai_rest = N'tạm nghỉ';
 
-EXEC DeleteUser
-    @UserID = 7;
+EXEC proc_DeleteUser
+    @UserID = 1001;
 
 GO
 
@@ -1228,14 +1206,14 @@ BEGIN
 
     -- Kiểm tra tham số đầu vào
     IF @CustomerID IS NULL OR @FromDate IS NULL OR @ToDate IS NULL
-        RETURN NULL;
+        RETURN N'THAM SỐ KHÔNG NULL'; 
 
     IF @FromDate > @ToDate
-        RETURN NULL;
+        RETURN N'KHOẢNG THỜI GIAN KHÔNG HỢP LỆ';
 
     -- Kiểm tra khách hàng có tồn tại không
     IF NOT EXISTS (SELECT 1 FROM CUSTOMER WHERE user_ID = @CustomerID)
-        RETURN NULL;
+        RETURN N'KHÁCH HÀNG KHÔNG TỒN TẠI'; 
 
     -- CURSOR duyệt qua từng đơn hàng của khách (đã hoàn tất) trong khoảng thời gian
     DECLARE cur_Order CURSOR LOCAL FOR
@@ -1289,10 +1267,41 @@ SELECT dbo.fn_TongChiTieuKhachHang(102, '2025-01-01', '2025-12-31') AS KetQua;
 -- TEST FUNCTION TỔNG CHI TIÊU
 SELECT * FROM CUSTOMER;
 SELECT * FROM ORDERS;
-SELECT dbo.fn_TongChiTieuKhachHang(3, '2024-01-01', '2026-01-01') AS TongChiTieu_KH3;
-SELECT dbo.fn_TongChiTieuKhachHang(4, '2024-01-01', '2026-01-01') AS TongChiTieu_KH3;
 
-SELECT dbo.fn_TongChiTieuKhachHang(999, '2024-01-01', '2026-01-01') AS TongChi_KH_KhongTonTai; -- khách không tồn tại -> NULL
+-- Case 1: CustomerID = NULL
+SELECT dbo.fn_TongChiTieuKhachHang(NULL, '2025-01-01', '2025-12-31') AS KQ;
+-- Mong đợi: THAM SỐ KHÔNG NULL
+
+-- Case 2: Ngày bắt đầu sau ngày kết thúc
+SELECT dbo.fn_TongChiTieuKhachHang(101, '2025-12-31', '2025-01-01') AS KQ;
+-- Mong đợi: KHOẢNG THỜI GIAN KHÔNG HỢP LỆ
+
+-- Case 3: CustomerID = 999 (không có trong bảng)
+SELECT dbo.fn_TongChiTieuKhachHang(999, '2025-01-01', '2025-12-31') AS KQ;
+-- Mong đợi: KHÁCH HÀNG KHÔNG TỒN TẠI
+
+-- Case 4: Customer chưa có đơn "hoàn tất"
+-- place holder cho chưa có đơn hoàn tất (SELECT dbo.fn_TongChiTieuKhachHang(105, '2025-01-01', '2025-12-31') AS KQ;)
+-- Mong đợi: Khách hàng ID 105: Tổng chi tiêu = 0.00 (Số đơn = 0, Trung bình = 0.00) : SẮT (vì chưa có đơn hoàn tất)
+
+-- Case 5: Khoảng ngày không chứa đơn nào
+-- place holder cho chưa có đơn (SELECT dbo.fn_TongChiTieuKhachHang(101, '2026-01-01', '2026-12-31') AS KQ;)
+-- Mong đợi: Khách hàng ID 101: Tổng chi tiêu = 0.00 (Số đơn = 0, Trung bình = 0.00) : SẮT (vì không có đơn hoàn tất trong khoảng)
+
+-- chỉnh lại theo data chính thức lần sau
+-- Case 6: Customer có đơn hoàn tất 
+SELECT dbo.fn_TongChiTieuKhachHang(102, '2025-01-01', '2025-12-31') AS KQ;
+-- Mong đợi: Khách hàng ID 102: Tổng chi tiêu = 70000.00 (Số đơn = 1, Trung bình = 70000.00) : ĐỒNG
+
+---- Tạo thêm đơn hoàn tất cho cùng khách (place holder)
+--INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang, ngay_tao)
+--VALUES (602, 201, 102, N'hoàn tất', N'Thêm test', N'TP.HCM', 90000, 10000, '2025-04-01');
+
+---- Case 7: Tính tổng nhiều đơn place holder chờ data chính thức
+--SELECT dbo.fn_TongChiTieuKhachHang(102, '2025-01-01', '2025-12-31') AS KQ;
+-- Mong đợi: Khách hàng ID 102: Tổng chi tiêu = 170000.00 (Số đơn = 2, Trung bình = 85000.00) : BẠC
+
+
 
 --fn_TongTienTietKiemTuVoucher: tính số tiền tiết kiệm từ voucher
 IF OBJECT_ID('fn_TongTienTietKiemTuVoucher', 'FN') IS NOT NULL
@@ -1329,9 +1338,8 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM CUSTOMER WHERE user_ID = @CustomerID)
         RETURN -3.0;
 
-    /* 3. CURSOR duyệt từng đơn hàng có áp dụng voucher 
-          của khách hàng trong khoảng thời gian [FromDate, ToDate) */
-    DECLARE cur_Voucher CURSOR LOCAL FAST_FORWARD FOR
+    -- 3. CURSOR duyệt từng đơn hàng có áp dụng voucher
+    DECLARE cur_Voucher CURSOR LOCAL FAST_FORWARD FOR -- fast forward (tối ưu cho việc chỉ đọc và duyệt tiến)
         SELECT 
             o.gia_don_hang,
             o.phi_giao_hang,
@@ -1353,15 +1361,33 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Tính số tiền giảm cho đơn này
-        SET @TienGiam = (@GiaDon * @PhanTramGiam) / 100.0;
+        SET @MinOrderValue = 0;
 
-        -- (Option) Bảo vệ: không giảm quá số tiền đơn
-        IF @TienGiam > @GiaDon
-            SET @TienGiam = @GiaDon;
+        -- Parse "Đơn tối thiểu 50k" -> 50000
+        IF @DieuKienSuDung LIKE N'Đơn tối thiểu %k'
+        BEGIN
+            SET @StartPos = PATINDEX('%[0-9]%', @DieuKienSuDung); -- vị trí bắt đầu số tiền
+            IF @StartPos > 0
+            BEGIN
+                --temp string = cat chuoi len dksd - len startpos - len('k') + 1  
+                SET @TempString = SUBSTRING(@DieuKienSuDung, 
+                                            @StartPos, 
+                                            LEN(@DieuKienSuDung) - @StartPos );
+                                
+                IF ISNUMERIC(@TempString) = 1
+                    SET @MinOrderValue = CAST(@TempString AS DECIMAL(18,2)) * 1000;
+            END
+        END
 
-        -- Cộng dồn
-        SET @TongTietKiem = @TongTietKiem + ISNULL(@TienGiam, 0);
+        -- Nếu đơn >= điều kiện tối thiểu mới tính tiền giảm
+        IF @GiaDonHang >= @MinOrderValue
+        BEGIN
+            -- Nếu là freeship -> giảm theo phí giao hàng
+            IF @MoTa LIKE N'Freeship%'
+                SET @TongTietKiem = @TongTietKiem + (@PhiGiaoHang * @PhanTramGiam / 100.0);
+            ELSE
+                SET @TongTietKiem = @TongTietKiem + (@GiaDonHang * @PhanTramGiam / 100.0);
+        END
 
         FETCH NEXT FROM cur_Voucher 
             INTO @GiaDonHang, @PhiGiaoHang, @PhanTramGiam, @DieuKienSuDung, @MoTa;
@@ -1374,96 +1400,135 @@ BEGIN
 END;
 GO
 
+--case 1
+SELECT dbo.fn_TongTienTietKiemTuVoucher(NULL, '2025-01-01', '2025-12-31') AS KQ;
+-- Mong đợi: -1 (tham số NULL)
+
+-- case 2
+SELECT dbo.fn_TongTienTietKiemTuVoucher(101, '2025-12-31', '2025-01-01') AS KQ;
+-- Mong đợi: -2 (ngày bắt đầu sau ngày kết thúc)
+
+-- case 3
+SELECT dbo.fn_TongTienTietKiemTuVoucher(999, '2025-01-01', '2025-12-31') AS KQ;
+-- Mong đợi: -3 (không có khách hàng)
+
+-- case 4
+SELECT dbo.fn_TongTienTietKiemTuVoucher(105, '2025-01-01', '2025-12-31') AS KQ;
+-- 👉 Mong đợi: 0.00 (không có đơn áp dụng voucher)
+
+--case 5
+SELECT * FROM VOUCHER WHERE customer_ID = 102;
+SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2025-01-01', '2025-12-31') AS KQ;
+-- Tính: (gia_don_hang * 30%) = 60000 * 0.3 = 18000
+-- Mong đợi: 18000.00
+
+-- case 6: không đạt đơn tối thiểu.
+--INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
+--VALUES (910, '2026-01-01', N'Giảm 20%', N'Đơn tối thiểu 200k', 20, 501, 102);
+SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2025-01-01', '2025-12-31') AS KQ;
+-- Đơn chỉ 60k < 200k → không giảm
+-- Mong đợi: 18000.00 (chỉ tính voucher 900)
+
+-- case 7: 2 voucher 1 đơn
+INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
+VALUES (905, '2026-06-01', N'Giảm 20%', N'Đơn tối thiểu 50k', 20, 502, 103);
+SELECT dbo.fn_TongTienTietKiemTuVoucher(103, '2025-01-01', '2025-12-31') AS KQ;
+-- Tính: 80,000 * 20% + 80,000*20% = 32,000
+-- Mong đợi: 32000.00
+
+select * from voucher;
+select * from orders;
+
+-- case 8
+SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2026-01-01', '2026-12-31') AS KQ;
+-- 👉 Mong đợi: 0.00 (không có đơn áp dụng voucher nào)
+
+-- case 9: update theo dữ liệu chính thức
+--UPDATE VOUCHER SET order_ID = 501 WHERE voucher_ID = 902;  -- Freeship
+--UPDATE VOUCHER SET customer_ID = 102 WHERE voucher_ID = 902;
+
+SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2025-01-01', '2025-12-31') AS KQ;
+-- Tổng: giảm 18,000 (60,000*30%) + freeship: 10,000 = 28,000
+-- Mong đợi: 28000.00
+
+-----------------------------------------------------------
+-- REGION 7.5: UPDATE + DELETE ORDER
+-----------------------------------------------------------
+IF OBJECT_ID('UpdateOrderStatus', 'P') IS NOT NULL
+    DROP PROC UpdateOrderStatus;
 GO
--- TEST FUNCTION TIẾT KIỆM 
--- Tổng tiền khách 4 đã tiết kiệm nhờ voucher từ 2024 đến 2026
-SELECT dbo.fn_TongTienTietKiemTuVoucher(4, '2024-01-01', '2026-01-01') AS TongTienTietKiem_KH4;
 
--- Customer không tồn tại
-SELECT dbo.fn_TongTienTietKiemTuVoucher(999, '2024-01-01', '2026-01-01') AS TongTienTietKiem_KH999;
-
-    -----------------------------------------------------------
-    -- REGION 7.5: STORED PROCEDURES CHO QUẢN LÝ ORDERS (CHO PHẦN 3.2)
-    -----------------------------------------------------------
-
-    -- UpdateOrderStatus: Cập nhật trạng thái đơn hàng với kiểm tra logic
-    IF OBJECT_ID('UpdateOrderStatus', 'P') IS NOT NULL
-        DROP PROC UpdateOrderStatus;
-    GO
-
-    CREATE PROC UpdateOrderStatus
-        @OrderID       INT,
-        @TrangThai     NVARCHAR(50)
-    AS
-    BEGIN
-        SET NOCOUNT ON;
+CREATE PROC UpdateOrderStatus
+    @OrderID       INT,
+    @TrangThai     NVARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        -- Kiểm tra đơn hàng tồn tại
+        IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID)
+            THROW 50300, N'Không tìm thấy đơn hàng với ID cần cập nhật.', 1;
         
-        BEGIN TRY
-            -- Kiểm tra đơn hàng tồn tại
-            IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID)
-                THROW 50300, N'Không tìm thấy đơn hàng với ID cần cập nhật.', 1;
-            
-            -- Kiểm tra trạng thái hợp lệ
-            IF @TrangThai NOT IN (N'đang xử lý', N'đang giao', N'hoàn tất', N'hủy')
-                THROW 50301, N'Trạng thái không hợp lệ. Các trạng thái hợp lệ: đang xử lý, đang giao, hoàn tất, hủy', 1;
-            
-            -- Lấy trạng thái hiện tại
-            DECLARE @CurrentStatus NVARCHAR(50);
-            SELECT @CurrentStatus = trang_thai FROM ORDERS WHERE order_ID = @OrderID;
-            
-            -- Kiểm tra logic chuyển trạng thái
-            IF @CurrentStatus IN (N'hoàn tất', N'hủy')
-                THROW 50302, N'Không thể thay đổi trạng thái đơn hàng đã hoàn tất hoặc đã hủy', 1;
-            
-            IF @CurrentStatus = N'đang xử lý' AND @TrangThai NOT IN (N'đang giao', N'hủy')
-                THROW 50303, N'Đơn hàng đang xử lý chỉ có thể chuyển sang "đang giao" hoặc "hủy"', 1;
-            
-            IF @CurrentStatus = N'đang giao' AND @TrangThai <> N'hoàn tất'
-                THROW 50304, N'Đơn hàng đang giao chỉ có thể chuyển sang "hoàn tất"', 1;
-            
-            -- Cập nhật trạng thái (trigger sẽ kiểm tra logic)
-            UPDATE ORDERS
-            SET trang_thai = @TrangThai
-            WHERE order_ID = @OrderID;
-            
-        END TRY
-        BEGIN CATCH
-            THROW;
-        END CATCH
-    END;
-    GO
-
-    -- DeleteOrder: Xóa đơn hàng (chỉ cho phép xóa đơn đã hủy)
-    IF OBJECT_ID('DeleteOrder', 'P') IS NOT NULL
-        DROP PROC DeleteOrder;
-    GO
-
-    CREATE PROC DeleteOrder
-        @OrderID       INT
-    AS
-    BEGIN
-        SET NOCOUNT ON;
+        -- Kiểm tra trạng thái hợp lệ
+        IF @TrangThai NOT IN (N'đang xử lý', N'đang giao', N'hoàn tất', N'hủy')
+            THROW 50301, N'Trạng thái không hợp lệ. Các trạng thái hợp lệ: đang xử lý, đang giao, hoàn tất, hủy', 1;
         
-        BEGIN TRY
-            -- Kiểm tra đơn hàng tồn tại
-            IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID)
-                THROW 50400, N'Không tìm thấy đơn hàng với ID cần xóa.', 1;
-            
-            -- Chỉ cho phép xóa đơn đã hủy
-            IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID AND trang_thai = N'hủy')
-                THROW 50401, N'Chỉ có thể xóa đơn hàng đã ở trạng thái "hủy"', 1;
-            
-            -- Xóa đơn hàng (CASCADE sẽ xóa các bản ghi liên quan)
-            DELETE FROM ORDERS
-            WHERE order_ID = @OrderID;
-            
-        END TRY
-        BEGIN CATCH
-            THROW;
-        END CATCH
-    END;
-    GO
+        -- Lấy trạng thái hiện tại
+        DECLARE @CurrentStatus NVARCHAR(50);
+        SELECT @CurrentStatus = trang_thai FROM ORDERS WHERE order_ID = @OrderID;
+        
+        -- Kiểm tra logic chuyển trạng thái
+        IF @CurrentStatus IN (N'hoàn tất', N'hủy')
+            THROW 50302, N'Không thể thay đổi trạng thái đơn hàng đã hoàn tất hoặc đã hủy', 1;
+        
+        IF @CurrentStatus = N'đang xử lý' AND @TrangThai NOT IN (N'đang giao', N'hủy')
+            THROW 50303, N'Đơn hàng đang xử lý chỉ có thể chuyển sang "đang giao" hoặc "hủy"', 1;
+        
+        IF @CurrentStatus = N'đang giao' AND @TrangThai <> N'hoàn tất'
+            THROW 50304, N'Đơn hàng đang giao chỉ có thể chuyển sang "hoàn tất"', 1;
+        
+        -- Cập nhật trạng thái (trigger sẽ kiểm tra logic)
+        UPDATE ORDERS
+        SET trang_thai = @TrangThai
+        WHERE order_ID = @OrderID;
+        
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
+GO
 
+-- DeleteOrder: Xóa đơn hàng (chỉ cho phép xóa đơn đã hủy)
+IF OBJECT_ID('DeleteOrder', 'P') IS NOT NULL
+    DROP PROC DeleteOrder;
+GO
+
+CREATE PROC DeleteOrder
+    @OrderID       INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        -- Kiểm tra đơn hàng tồn tại
+        IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID)
+            THROW 50400, N'Không tìm thấy đơn hàng với ID cần xóa.', 1;
+        
+        -- Chỉ cho phép xóa đơn đã hủy
+        IF NOT EXISTS (SELECT 1 FROM ORDERS WHERE order_ID = @OrderID AND trang_thai = N'hủy')
+            THROW 50401, N'Chỉ có thể xóa đơn hàng đã ở trạng thái "hủy"', 1;
+        
+        -- Xóa đơn hàng (CASCADE sẽ xóa các bản ghi liên quan)
+        DELETE FROM ORDERS
+        WHERE order_ID = @OrderID;
+        
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
 -----------------------------------------------------------
 -- REGION 8: XEM LẠI TOÀN BỘ DỮ LIỆU
 -----------------------------------------------------------
