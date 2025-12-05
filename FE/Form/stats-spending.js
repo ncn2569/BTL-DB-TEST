@@ -17,20 +17,6 @@ async function handleSPForm(e) {
     return;
   }
 
-  if (parseInt(cid, 10) < 1) {
-    msgDiv.textContent = 'Customer ID phải là số nguyên dương.';
-    msgDiv.className = 'message error';
-    msgDiv.style.display = 'block';
-    return;
-  }
-
-  if (new Date(from) > new Date(to)) {
-    msgDiv.textContent = 'Ngày bắt đầu phải nhỏ hơn ngày kết thúc.';
-    msgDiv.className = 'message error';
-    msgDiv.style.display = 'block';
-    return;
-  }
-
   try {
     msgDiv.textContent = 'Đang tính toán...';
     msgDiv.className = 'message';
@@ -40,7 +26,17 @@ async function handleSPForm(e) {
     const data = await res.json();
 
     if (!data.success) throw new Error(data.error || data.message);
+    const totalStr = String(data.total ?? '');
 
+    const isLogicError =
+      totalStr.includes('THAM SỐ KHÔNG NULL') ||
+      totalStr.includes('KHOẢNG THỜI GIAN KHÔNG HỢP LỆ') ||
+      totalStr.includes('KHÁCH HÀNG KHÔNG TỒN TẠI');
+  if (isLogicError) { // Ném lỗi để nhảy xuống catch và hiển thị màu đỏ 
+    msgDiv.textContent = totalStr; 
+    msgDiv.className = 'message error'; 
+    msgDiv.style.display = 'block'; return; 
+  }
     const total = parseFloat(data.total || 0);
     let message = data.message;
     
