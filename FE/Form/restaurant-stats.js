@@ -34,7 +34,6 @@ async function handleRSForm(e) {
   }
 
   try {
-    tbody.innerHTML = '<tr><td colspan="5">Đang tải...</td></tr>';
     const url = `${API_BASE}/stats/restaurantsales?fromDate=${fromDate}&toDate=${toDate}&minTotal=${minTotal}`;
     const res = await fetch(url);
     const data = await res.json();
