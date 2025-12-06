@@ -1879,14 +1879,14 @@ BEGIN
         )
 			THROW 50042, N'Không thể xóa người dùng vì là shipper đã/đang giao đơn', 1;
 
-        -- Nếu là parent restaurant thì không được xóa
+        -- Nếu là RESTAURANT đang là nhà hàng mẹ (đang quản lý chi nhánh khác)
         IF EXISTS (
             SELECT 1
             FROM RESTAURANT r
             JOIN PARENT_RESTAURANT p ON p.parent_id = r.user_ID
             WHERE r.user_ID = @UserID
         )
-            THROW 50043, N'Không thể xóa nhà hàng mẹ khi vẫn còn nhà hàng con', 1;
+            THROW 50043, N'Không thể xóa người dùng vì là nhà hàng mẹ đang quản lý chi nhánh khác', 1;
 
 		-- Xóa dữ liệu sau khi kiểm tra điều kiện
 		DELETE FROM USERS
@@ -1899,21 +1899,6 @@ END;
 GO
 SELECT * FROM USERS;
 SELECT * FROM RESTAURANT;
-
--- Test nhà hàng con
--- Test nhà hàng mẹ và con
-SELECT 
-    c.parent_id                      AS RestaurantMe_ID,
-    u_parent.Ho_ten                  AS RestaurantMe_Ten,
-    c.child_id                       AS RestaurantCon_ID,
-    u_child.Ho_ten                   AS RestaurantCon_Ten
-FROM PARENT_RESTAURANT c
-JOIN RESTAURANT r_parent   ON r_parent.user_ID = c.parent_id
-JOIN USERS     u_parent    ON u_parent.ID      = r_parent.user_ID
-JOIN RESTAURANT r_child    ON r_child.user_ID  = c.child_id
-JOIN USERS     u_child     ON u_child.ID       = r_child.user_ID
-ORDER BY 
-    RestaurantMe_ID, RestaurantCon_ID;
 
 -- TEST CRUD USERS
 
