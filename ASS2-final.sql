@@ -4,7 +4,6 @@
 
 -- Xóa các bảng con trước, bảng cha sau để tránh lỗi khóa ngoại
 IF OBJECT_ID('DELIVERING', 'U') IS NOT NULL DROP TABLE DELIVERING;
---IF OBJECT_ID('RATING_FOOD', 'U') IS NOT NULL DROP TABLE RATING_FOOD;--để đây để nếu ai còn bảng rating food thì bỏ
 IF OBJECT_ID('RATING', 'U') IS NOT NULL DROP TABLE RATING;
 IF OBJECT_ID('FOOD_ORDERED', 'U') IS NOT NULL DROP TABLE FOOD_ORDERED;
 IF OBJECT_ID('VOUCHER', 'U') IS NOT NULL DROP TABLE VOUCHER;
@@ -1007,6 +1006,7 @@ INSERT INTO FOOD_BELONG VALUES
 (1021, 226), (1021, 227), (1021, 228), (1021, 229), (1021, 230), (1021, 233), (1021, 234), 
 (1021, 235), (1021, 237), (1021, 238), (1021, 239), (1021, 242), (1021, 243), (1021, 245), 
 (1021, 246), (1021, 247), (1021, 248), (1021, 251), (1021, 252), (1021, 253), (1021, 254);
+
 INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang, ngay_tao)
 VALUES
 (500, 201, 101, N'đang xử lý', N'Không cay', N'Hà Nội', 75000, 15000, DATEADD(hour, -2, GETDATE())),
@@ -1222,6 +1222,7 @@ INSERT INTO FOOD_ORDERED VALUES
 (1042, 522),
 (1045, 523), (1046, 523),
 (1047, 524);
+
 INSERT INTO DELIVERING (shipper_ID, order_ID) VALUES
 (301, 500),
 (302, 503),
@@ -1236,6 +1237,7 @@ INSERT INTO DELIVERING (shipper_ID, order_ID) VALUES
 (313, 518),
 (314, 520),
 (315, 523);
+
 INSERT INTO RATING (order_ID, rating_ID, food_ID, Noi_dung, Diem_danh_gia)
 VALUES
 (501, 1, 1001, N'Phở ngon, ship nhanh.', 5),
@@ -1250,6 +1252,7 @@ VALUES
 (503, 1, 1005, N'Bún chả ổn, nhưng giao hàng hơi chậm.', 3),
 (506, 1, 1010, N'Bún bò Huế truyền thống, rất ưng ý.', 5),
 (523, 1, 1045, N'Bia lạnh, giao hàng nhanh chóng.', 4);
+
 INSERT INTO PARENT_RESTAURANT (parent_id, child_id) VALUES
 (201, 202),
 (201, 203),
@@ -1264,6 +1267,7 @@ INSERT INTO PARENT_RESTAURANT (parent_id, child_id) VALUES
 (220, 222),
 (223, 224),
 (230, 231);
+
 INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
 VALUES
 (900, '2026-01-01', N'Giảm 30%', N'Đơn tối thiểu 50k', 30, 501, 102),
@@ -1276,7 +1280,7 @@ VALUES
 (907, '2027-03-01', N'Giảm 15%', N'Đơn tối thiểu 120k', 15, NULL, 109),   
 (908, '2026-02-05', N'Giảm 30%', N'Đơn tối thiểu 90k', 30, 510, 110),
 (909, '2027-05-20', N'Giảm 5%', N'Đơn tối thiểu 0k', 5, 512, 111),
-(910, '2026-07-25', N'Giảm 25%', N'Đơn tối thiểu 200k', 25, NULL, 112),   
+(910, '2026-07-25', N'Giảm 25%', N'Đơn tối thiểu 200k', 25, NULL, 102),   
 (911, '2026-11-11', N'Freeship', N'Đơn tối thiểu 0k', 100, 515, 113),
 (912, '2027-02-14', N'Giảm 15%', N'Đơn tối thiểu 30k', 15, NULL, 114),
 (913, '2026-09-30', N'Giảm 25%', N'Đơn tối thiểu 150k', 25, 518, 115);
@@ -1379,29 +1383,7 @@ SELECT voucher_ID, order_ID, han_su_dung FROM VOUCHER WHERE voucher_ID = @vid;
 
 GO
 
--- TC2: Hủy đơn có voucher HẾT HẠN -> voucher không bị unassign
-PRINT N'[TC2] Hủy đơn có voucher đã hết hạn → không refund';
-
-DECLARE @oid2 INT = 999901;
-DECLARE @vid2 INT = 999901;
-
--- Tạo order test (đang xử lý)
-INSERT INTO ORDERS(order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang, ngay_tao)
-VALUES (@oid2, 201, 101, N'đang xử lý', N'TC2 create', N'Test address', 50000, 10000, GETDATE());
-
--- Gán voucher đã HẾT HẠN (ngày trước hiện tại)
-INSERT INTO VOUCHER(voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
-VALUES (@vid2, '2020-01-01', N'Expired Voucher TC2', N'No condition', 10, @oid2, 101);
-
--- Hủy order -> trigger chạy, nhưng voucher hết hạn nên không unassign
-UPDATE ORDERS SET trang_thai = N'hủy' WHERE order_ID = @oid2;
-
--- Kiểm tra: voucher.order_ID phải vẫn = @oid2 (không được refund)
-SELECT voucher_ID, order_ID, han_su_dung FROM VOUCHER WHERE voucher_ID = @vid2;
-
-GO
-
--- TC3: Hủy đơn không có voucher -> không lỗi, không ảnh hưởng
+-- TC2: Hủy đơn không có voucher -> không lỗi, không ảnh hưởng
 PRINT N'[TC3] Hủy đơn không có voucher → không đổi gì';
 
 DECLARE @oid3 INT = 999902;
@@ -1419,7 +1401,7 @@ SELECT * FROM VOUCHER WHERE order_ID = @oid3; -- expected: 0 rows
 
 GO
 
--- TC4: Update từ hủy -> hủy (không kích hoạt refund lại)
+-- TC3: Update từ hủy -> hủy (không kích hoạt refund lại)
 PRINT N'[TC4] Update từ hủy → hủy (không kích hoạt logic refund)';
 
 -- Dùng order TC1 (@oid = 999900) hoặc TC3 (@oid3 = 999902)
@@ -2131,26 +2113,18 @@ SELECT dbo.fn_TongChiTieuKhachHang(999, '2025-01-01', '2025-12-31') AS KQ;
 -- Mong đợi: KHÁCH HÀNG KHÔNG TỒN TẠI
 
 -- Case 4: Customer chưa có đơn "hoàn tất"
--- place holder cho chưa có đơn hoàn tất (SELECT dbo.fn_TongChiTieuKhachHang(105, '2025-01-01', '2025-12-31') AS KQ;)
--- Mong đợi: Khách hàng ID 105: Tổng chi tiêu = 0.00 (Số đơn = 0, Trung bình = 0.00) : SẮT (vì chưa có đơn hoàn tất)
+SELECT dbo.fn_TongChiTieuKhachHang(136, '2025-01-01', '2025-12-31') AS KQ;
+-- Mong đợi: Khách hàng ID 136: Tổng chi tiêu = 0.00 (Số đơn = 0, Trung bình = 0.00) : SẮT (vì chưa có đơn hoàn tất)
 
 -- Case 5: Khoảng ngày không chứa đơn nào
--- place holder cho chưa có đơn (SELECT dbo.fn_TongChiTieuKhachHang(101, '2026-01-01', '2026-12-31') AS KQ;)
--- Mong đợi: Khách hàng ID 101: Tổng chi tiêu = 0.00 (Số đơn = 0, Trung bình = 0.00) : SẮT (vì không có đơn hoàn tất trong khoảng)
+SELECT dbo.fn_TongChiTieuKhachHang(101, '2024-01-01', '2025-1-1') AS KQ;
+-- Mong đợi: Khách hàng ID 101: Tổng chi tiêu = 0.00 (Số đơn = 0, Trung bình = 0.00) : SẮT (vì không có đơn hoàn tất trong khoảng tgian)
 
--- chỉnh lại theo data chính thức lần sau
 -- Case 6: Customer có đơn hoàn tất 
+
+select * from orders where customer_ID=102; -- (70+85+120=275)
 SELECT dbo.fn_TongChiTieuKhachHang(102, '2025-01-01', '2025-12-31') AS KQ;
--- Mong đợi: Khách hàng ID 102: Tổng chi tiêu = 70000.00 (Số đơn = 1, Trung bình = 70000.00) : ĐỒNG
-
----- Tạo thêm đơn hoàn tất cho cùng khách (place holder)
---INSERT INTO ORDERS (order_ID, restaurant_ID, customer_ID, trang_thai, ghi_chu, dia_chi, gia_don_hang, phi_giao_hang, ngay_tao)
---VALUES (602, 201, 102, N'hoàn tất', N'Thêm test', N'TP.HCM', 90000, 10000, '2025-04-01');
-
----- Case 7: Tính tổng nhiều đơn place holder chờ data chính thức
---SELECT dbo.fn_TongChiTieuKhachHang(102, '2025-01-01', '2025-12-31') AS KQ;
--- Mong đợi: Khách hàng ID 102: Tổng chi tiêu = 170000.00 (Số đơn = 2, Trung bình = 85000.00) : BẠC
-
+-- Mong đợi: Khách hàng ID 102: Tổng chi tiêu = 275000.00 (Số đơn = 3, Trung bình = 91666.67) : VÀNG VIP PRO 
 
 
 --fn_TongTienTietKiemTuVoucher: tính số tiền tiết kiệm từ voucher
@@ -2264,36 +2238,43 @@ SELECT dbo.fn_TongTienTietKiemTuVoucher(999, '2025-01-01', '2025-12-31') AS KQ;
 
 -- case 4
 SELECT dbo.fn_TongTienTietKiemTuVoucher(105, '2025-01-01', '2025-12-31') AS KQ;
--- 👉 Mong đợi: 0.00 (không có đơn áp dụng voucher)
+-- Mong đợi: 0.00 (không có đơn áp dụng voucher)
 
 --case 5
 SELECT * FROM VOUCHER WHERE customer_ID = 102;
+SELECT * FROM orders WHERE customer_ID = 102;
 SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2025-01-01', '2025-12-31') AS KQ;
 -- Tính: (gia_don_hang * 30%) = 60000 * 0.3 = 18000
 -- Mong đợi: 18000.00
 
--- case 6: không đạt đơn tối thiểu.
---INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
---VALUES (910, '2026-01-01', N'Giảm 20%', N'Đơn tối thiểu 200k', 20, 501, 102);
+-- case 6: không đạt đơn tối thiểu. gỡ comment update và chạy(order ID 501 co gia don hang < don toi thieu -> không dùng được)
+
+--update voucher SET order_ID = 501 where voucher_ID=910;
+select * from voucher where customer_ID=102;
+select * from orders where customer_ID=102;
 SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2025-01-01', '2025-12-31') AS KQ;
--- Đơn chỉ 60k < 200k → không giảm
+-- Đơn chỉ 60k < 100k → không giảm
 -- Mong đợi: 18000.00 (chỉ tính voucher 900)
 
--- case 7: 2 voucher 1 đơn
+-- case 7: 2 voucher 1 đơn 
+-- lệnh dưới đây insert voucher 905 vào order 502 của cus 103
 INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
 VALUES (905, '2026-06-01', N'Giảm 20%', N'Đơn tối thiểu 50k', 20, 502, 103);
+select * from orders where customer_ID=103;
+select * from voucher where customer_ID=103;
 SELECT dbo.fn_TongTienTietKiemTuVoucher(103, '2025-01-01', '2025-12-31') AS KQ;
 -- Tính: 80,000 * 20% + 80,000*20% = 32,000
 -- Mong đợi: 32000.00
 
-select * from voucher;
-select * from orders;
 
 -- case 8
-SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2026-01-01', '2026-12-31') AS KQ;
--- 👉 Mong đợi: 0.00 (không có đơn áp dụng voucher nào)
+SELECT dbo.fn_TongTienTietKiemTuVoucher(132, '2026-01-01', '2026-12-31') AS KQ;
+-- Mong đợi: 0.00 (không có đơn áp dụng voucher nào)
 
--- case 9: update theo dữ liệu chính thức
+-- case 9: 
+select * from voucher where customer_ID=102;
+select * from orders where customer_ID=102;
+-- gỡ comment và chạy lệnh dưới đây để gán voucher có free ship vào order của customer 102
 --UPDATE VOUCHER SET order_ID = 501 WHERE voucher_ID = 902;  -- Freeship
 --UPDATE VOUCHER SET customer_ID = 102 WHERE voucher_ID = 902;
 
@@ -2379,6 +2360,7 @@ BEGIN
         THROW;
     END CATCH
 END;
+
 -----------------------------------------------------------
 -- REGION 8: XEM LẠI TOÀN BỘ DỮ LIỆU
 -----------------------------------------------------------
