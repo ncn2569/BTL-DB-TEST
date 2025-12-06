@@ -120,10 +120,10 @@ function collectFormData() {
   const Dia_chi = document.getElementById('user-diachi').value.trim();
   const vai_tro = document.getElementById('user-role').value;
 
-  if (!Ho_ten || !Email || !vai_tro) {
-    showMsg('Vui lòng nhập đầy đủ họ tên, email và vai trò.', true);
-    return null;
-  }
+  // if (!Ho_ten || !Email || !vai_tro) {
+  //   showMsg('Vui lòng nhập đầy đủ họ tên, email và vai trò.', true);
+  //   return null;
+  // }
 
   const payload = { ID, Ho_ten, Email, SDT, Password, TKNH, Dia_chi, vai_tro };
 

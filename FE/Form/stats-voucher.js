@@ -10,11 +10,11 @@ async function handleVSForm(e) {
 
   msgDiv.textContent = '';
 
-  if (!cid || !from || !to) {
-    msgDiv.textContent = 'Nhập đầy đủ customerID, fromDate, toDate.';
-    msgDiv.className = 'message error';
-    return;
-  }
+  // if (!cid || !from || !to) {
+  //   msgDiv.textContent = 'Nhập đầy đủ customerID, fromDate, toDate.';
+  //   msgDiv.className = 'message error';
+  //   return;
+  // }
 
   try {
     const url = `${API_BASE}/stats/voucherSaving?customerID=${cid}&fromDate=${from}&toDate=${to}`;
@@ -24,7 +24,8 @@ async function handleVSForm(e) {
     if (!data.success) throw new Error(data.error || data.message);
 
     msgDiv.textContent = data.message;
-    msgDiv.className = 'message success';
+    if(data.total == -1 || data.total == -2 ||data.total == -3 ) msgDiv.className='message error'
+    else msgDiv.className = 'message success';
 
   } catch (err) {
     msgDiv.textContent = 'Lỗi: ' + err.message;

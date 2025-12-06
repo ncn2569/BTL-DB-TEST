@@ -67,12 +67,12 @@ exports.createUser = async (req, res) => {
     bien_so_xe, trang_thai_ship, quyen_han,
   } = req.body;
 
-  if (!ID || !Ho_ten || !Email || !vai_tro) {
-    return res.status(400).json({
-      success: false,
-      message: 'Các trường ID, Ho_ten, Email, vai_tro là bắt buộc.',
-    });
-  }
+  // if (!ID || !Ho_ten || !Email || !vai_tro) {
+  //   return res.status(400).json({
+  //     success: false,
+  //     message: 'Các trường ID, Ho_ten, Email, vai_tro là bắt buộc.',
+  //   });
+  // }
   
   try {
     const pool = await poolPromise;
@@ -235,12 +235,12 @@ exports.searchOrders = async (req, res) => {
 exports.getCustomerSpending = async (req, res) => {
   const { customerID, fromDate, toDate } = req.query;
 
-  if (!customerID || !fromDate || !toDate) {
-    return res.status(400).json({
-      success: false,
-      message: 'Thiếu customerID, fromDate hoặc toDate'
-    });
-  }
+  // if (!customerID || !fromDate || !toDate) {
+  //   return res.status(400).json({
+  //     success: false,
+  //     message: 'Thiếu customerID, fromDate hoặc toDate'
+  //   });
+  // }
 
   try {
     const pool = await poolPromise;
@@ -382,12 +382,12 @@ exports.getRestaurantSalesStats = async (req, res) => {
 exports.getCustomerVoucherSaving = async (req, res) => {
   const { customerID, fromDate, toDate } = req.query;
 
-  if (!customerID || !fromDate || !toDate) {
-    return res.status(400).json({
-      success: false,
-      message: 'Thiếu customerID, fromDate hoặc toDate'
-    });
-  }
+  // if (!customerID || !fromDate || !toDate) {
+  //   return res.status(400).json({
+  //     success: false,
+  //     message: 'Thiếu customerID, fromDate hoặc toDate'
+  //   });
+  // }
 
   try {
     const pool = await poolPromise;

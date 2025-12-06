@@ -10,12 +10,12 @@ async function handleSPForm(e) {
 
   msgDiv.textContent = '';
 
-  if (!cid || !from || !to) {
-    msgDiv.textContent = 'Vui lòng nhập đầy đủ thông tin.';
-    msgDiv.className = 'message error';
-    msgDiv.style.display = 'block';
-    return;
-  }
+  // if (!cid || !from || !to) {
+  //   msgDiv.textContent = 'Vui lòng nhập đầy đủ thông tin.';
+  //   msgDiv.className = 'message error';
+  //   msgDiv.style.display = 'block';
+  //   return;
+  // }
 
   try {
     msgDiv.textContent = 'Đang tính toán...';
