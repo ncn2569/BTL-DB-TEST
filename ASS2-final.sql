@@ -2258,8 +2258,8 @@ SELECT dbo.fn_TongTienTietKiemTuVoucher(102, '2025-01-01', '2025-12-31') AS KQ;
 
 -- case 7: 2 voucher 1 đơn 
 -- lệnh dưới đây insert voucher 905 vào order 502 của cus 103
-INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
-VALUES (905, '2026-06-01', N'Giảm 20%', N'Đơn tối thiểu 50k', 20, 502, 103);
+-- INSERT INTO VOUCHER (voucher_ID, han_su_dung, mo_ta, dieu_kien_su_dung, gia_tri_su_dung, order_ID, customer_ID)
+-- VALUES (905, '2026-06-01', N'Giảm 20%', N'Đơn tối thiểu 50k', 20, 502, 103);
 select * from orders where customer_ID=103;
 select * from voucher where customer_ID=103;
 SELECT dbo.fn_TongTienTietKiemTuVoucher(103, '2025-01-01', '2025-12-31') AS KQ;
