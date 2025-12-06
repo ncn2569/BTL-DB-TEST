@@ -32,7 +32,7 @@
 
           <label>
             Tổng tối thiểu (VNĐ) <span class="required">*</span><br>
-            <input type="number" id="rs-min" required value="50000" min="0" step="1000">
+            <input type="number" id="rs-min" required value="50000" min="0" >
           </label>
 
           <button type="submit">Thống kê</button>
@@ -42,6 +42,24 @@
       <div id="rs-message" class="message"></div>
 
       <div class="table-wrapper">
+        <div class="form-row" style="margin-bottom: 12px;">
+        <label for="rs-sort-field">Sắp xếp theo:</label>
+        <select id="rs-sort-field">
+          <option value="tong_doanh_thu">Tổng doanh thu</option>
+          <option value="gia_tri_trung_binh">Giá trị TB</option>
+        </select>
+
+        <label for="rs-sort-dir" style="margin-left: 8px;">Thứ tự:</label>
+        <select id="rs-sort-dir">
+          <option value="desc">Giảm dần</option>
+          <option value="asc">Tăng dần</option>
+        </select>
+
+        <button type="button" id="rs-sort-btn" class="btn-secondary" style="margin-left: 8px;">
+          Áp dụng sắp xếp
+        </button>
+      </div>
+
         <table id="rs-table">
           <thead>
             <tr>
